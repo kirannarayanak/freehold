@@ -881,6 +881,23 @@
   }
 
   /* ---------- settings ---------- */
+  async function loadHooks() {
+    const box = document.getElementById("hooks");
+    if (!box) return;
+    try {
+      const d = await API.get("/api/spaces/" + S.space.key + "/webhooks");
+      box.classList.remove("muted");
+      box.innerHTML = d.webhooks.length ? d.webhooks.map(h =>
+        '<div class="mini"><span class="grow">' + esc(h.url) + "</span>" +
+        '<span class="muted small">' + (h.events.length ? esc(h.events.join(", ")) : "all events") + "</span>" +
+        (h.last_at ? '<span class="' + (h.last_error ? "danger" : "muted") + ' small">' +
+          (h.last_error ? esc(h.last_error.slice(0, 40)) : "HTTP " + h.last_status) + "</span>" : '<span class="muted small">never fired</span>') +
+        '<button class="btn ghost sm" data-act="testWebhook" data-id="' + h.id + '">Test</button>' +
+        '<button class="x danger" data-act="deleteWebhook" data-id="' + h.id + '" aria-label="Delete webhook">x</button></div>').join("")
+        : '<p class="muted small">None yet.</p>';
+    } catch (e) { box.textContent = e.message; }
+  }
+
   function viewSettings(v) {
     const sp = S.space, admin = isAdmin(), dis = admin ? "" : " disabled";
     if (!S.wf) S.wf = sp.statuses.map(s => Object.assign({ orig: s.name }, s));
@@ -914,8 +931,12 @@
       '<section class="card-sec"><h3>Export</h3><p class="muted small">Your data is yours. Exports include every work item with comments, time logs and links.</p>' +
       '<a class="btn ghost sm" href="' + API.fileUrl("/api/spaces/" + sp.key + "/export") + '" download>Download JSON</a> <a class="btn ghost sm" href="' + API.fileUrl("/api/spaces/" + sp.key + "/export.csv") + '" download>Download CSV</a></section>' +
 
+      (admin ? '<section class="card-sec"><h3>Webhooks</h3><p class="muted small">Freehold POSTs to these when things happen here. Each is signed with its own secret, which is shown once when you create it. A receiver that is down never blocks anyone\'s work.</p>' +
+        '<div id="hooks" class="muted small">Loading…</div>' +
+        '<form class="inline-form" data-form="addWebhook"><input name="url" type="url" required placeholder="https://example.com/freehold-hook" aria-label="Webhook URL"><button class="btn sm" type="submit">Add webhook</button></form></section>' : "") +
       (admin ? '<section class="card-sec danger-zone"><h3>Delete space</h3><p class="muted small">This removes every work item, comment and attachment in ' + esc(sp.key) + '. Export first if you might need it.</p><button class="btn danger sm" data-act="deleteSpace">Delete ' + esc(sp.key) + "</button></section>" : "") +
       "</div>";
+    if (admin) loadHooks();
   }
 
   /* ---------- profile ---------- */
@@ -1226,6 +1247,14 @@
     deleteSpace: () => confirmModal("Delete " + S.space.key + "?", "Everything in this space is deleted for everyone.", "Delete space", async () => {
       try { const key = S.space.key; await API.del("/api/spaces/" + key); S.space = null; await loadSpaces(); toast("Deleted " + key); go("#/"); } catch (e) { fail(e); }
     }, S.space.key),
+    testWebhook: async el => {
+      try { await API.post("/api/webhooks/" + el.dataset.id + "/test"); toast("Ping queued"); setTimeout(loadHooks, 1200); }
+      catch (e) { fail(e); }
+    },
+    deleteWebhook: async el => {
+      try { await API.del("/api/webhooks/" + el.dataset.id); await loadHooks(); toast("Webhook removed"); }
+      catch (e) { fail(e); }
+    },
     unmute: async el => {
       const prefs = Object.assign({}, S.me.prefs, { muted: (S.me.prefs.muted || []).filter(k => k !== el.dataset.k) });
       try { S.me = await API.patch("/api/me", { prefs }); renderView(); } catch (e) { fail(e); }
@@ -1337,6 +1366,16 @@
     spaceDetails: async form => {
       const f = Object.fromEntries(new FormData(form).entries());
       try { S.space = await API.patch("/api/spaces/" + S.space.key, f); await loadSpaces(); render(); toast("Saved"); } catch (e) { fail(e); }
+    },
+    addWebhook: async form => {
+      try {
+        const h = await API.post("/api/spaces/" + S.space.key + "/webhooks", { url: fld(form, "url").value });
+        form.reset();
+        await loadHooks();
+        // Shown once and never again, so it has to be copyable now.
+        confirmModal("Webhook added", "Signing secret, shown once:\n\n" + h.secret +
+          "\n\nVerify it as the X-Freehold-Signature header: sha256 HMAC of the request body.", "Done", () => {});
+      } catch (e) { fail(e); }
     },
     addMember: async form => {
       const f = Object.fromEntries(new FormData(form).entries());

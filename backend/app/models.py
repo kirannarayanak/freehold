@@ -93,6 +93,21 @@ class Version(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class Webhook(Base):
+    """An outgoing HTTP hook. The secret signs the body so the receiver can trust it."""
+    __tablename__ = "webhooks"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    space_id: Mapped[int] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"), index=True)
+    url: Mapped[str] = mapped_column(String(500))
+    secret: Mapped[str] = mapped_column(String(80), default="")
+    events: Mapped[list] = mapped_column(JSON, default=list)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_status: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    last_error: Mapped[str] = mapped_column(Text, default="")
+    last_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class WorkItem(Base):
     __tablename__ = "work_items"
     __table_args__ = (UniqueConstraint("space_id", "number"),)

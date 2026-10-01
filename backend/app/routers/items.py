@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .. import config, notify
+from .. import config, notify, webhooks
 from ..db import get_db, utcnow
 from ..models import Attachment, Comment, History, Link, Membership, Space, Sprint, User, WorkItem, Worklog
 from ..query import QueryError, run
@@ -100,7 +100,9 @@ def new_item(key: str, body: dict, user: User = Depends(current_user), db: Sessi
     space, _ = get_space(db, key, user, need="member")
     item = create_item(db, space, user, body)
     db.commit()
-    return item_to_dict(item)
+    payload = item_to_dict(item)
+    webhooks.deliver(db, space, "item.created", {"item": payload, "actor": user.handle})
+    return payload
 
 
 @router.get("/items/{key}")
@@ -112,9 +114,13 @@ def get_item(key: str, user: User = Depends(current_user), db: Session = Depends
 @router.patch("/items/{key}")
 def update_item(key: str, body: dict, user: User = Depends(current_user), db: Session = Depends(get_db)):
     item, space, _ = _item(db, key, user, need="member")
-    apply_changes(db, space, item, user, body)
+    changed = apply_changes(db, space, item, user, body)
     db.commit()
-    return item_to_dict(item, counts(db, [item.id]))
+    payload = item_to_dict(item, counts(db, [item.id]))
+    if changed:
+        webhooks.deliver(db, space, "item.updated", {"item": payload, "changed": changed,
+                                                     "actor": user.handle})
+    return payload
 
 
 def _delete_item(db: Session, item: WorkItem, user: User):
@@ -131,9 +137,11 @@ def _delete_item(db: Session, item: WorkItem, user: User):
 
 @router.delete("/items/{key}")
 def delete_item(key: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    item, _, _ = _item(db, key, user, need="member")
+    item, space, _ = _item(db, key, user, need="member")
+    gone = {"key": item.key, "title": item.title}
     _delete_item(db, item, user)
     db.commit()
+    webhooks.deliver(db, space, "item.deleted", {"item": gone, "actor": user.handle})
     return {"deleted": key.upper()}
 
 
@@ -190,6 +198,8 @@ def add_comment(key: str, body: CommentIn, user: User = Depends(current_user), d
         if u.id not in notified and u.id in members:
             notify.dispatch(db, u, "commented", f"{user.name} commented on {item.key}: {text[:80]}", item.key, user)
     db.commit()
+    webhooks.deliver(db, space, "comment.created",
+                     {"item": {"key": item.key, "title": item.title}, "body": text, "actor": user.handle})
     return _detail(db, item, space, space_role(db, space, user), user)
 
 

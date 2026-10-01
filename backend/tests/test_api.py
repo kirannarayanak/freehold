@@ -337,6 +337,91 @@ def test_versions_and_releases(client, world):
     assert after["version_id"] is None and after["title"] == "Ship it"
 
 
+def test_webhooks_deliver_and_sign(client, world):
+    """A real receiver on a real socket: a hook that is never actually delivered is not a feature."""
+    import http.server
+    import json as _json
+    import threading
+    import time as _time
+    from app import webhooks
+
+    received = []
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            body = self.rfile.read(int(self.headers["Content-Length"]))
+            received.append({"body": body, "sig": self.headers.get("X-Freehold-Signature")})
+            self.send_response(200)
+            self.end_headers()
+
+        def log_message(self, *a):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_address[1]}/hook"
+
+    A, B = world["A"], world["B"]
+    try:
+        # Only space admins manage hooks.
+        assert client.post("/api/spaces/WEB/webhooks", json={"url": url}, headers=B).status_code == 403
+        assert client.post("/api/spaces/WEB/webhooks", json={"url": "ftp://nope"},
+                           headers=A).status_code == 422
+
+        r = client.post("/api/spaces/WEB/webhooks", json={"url": url, "events": ["item.created"]}, headers=A)
+        assert r.status_code == 200, r.text
+        hook = r.json()
+        secret = hook["secret"]           # returned exactly once, on creation
+        assert secret and hook["has_secret"] is True
+
+        listed = client.get("/api/spaces/WEB/webhooks", headers=A).json()["webhooks"]
+        assert "secret" not in listed[0], "the signing secret must not be readable after creation"
+
+        item = client.post("/api/spaces/WEB/items", json={"title": "Hook me"}, headers=A).json()
+        for _ in range(50):
+            if received:
+                break
+            _time.sleep(0.1)
+        assert received, "no webhook arrived"
+
+        got = received[0]
+        payload = _json.loads(got["body"])
+        assert payload["event"] == "item.created" and payload["space"] == "WEB"
+        assert payload["data"]["item"]["key"] == item["key"]
+        # The signature is what lets a receiver trust the body.
+        assert got["sig"] == webhooks.sign(secret, got["body"])
+        assert got["sig"] != webhooks.sign("wrong-secret", got["body"])
+
+        # A hook subscribed only to item.created must not receive anything else.
+        received.clear()
+        client.patch(f"/api/items/{item['key']}", json={"priority": "High"}, headers=A)
+        _time.sleep(0.4)
+        assert not received, "hook received an event it was not subscribed to"
+
+        # Delivery result is recorded so an admin can see it without reading logs.
+        assert client.get("/api/spaces/WEB/webhooks", headers=A).json()["webhooks"][0]["last_status"] == 200
+        assert client.delete(f"/api/webhooks/{hook['id']}", headers=A).status_code == 200
+    finally:
+        server.shutdown()
+
+
+def test_webhook_failure_does_not_break_the_write(client, world):
+    """A dead receiver must never stop someone filing work."""
+    import time as _time
+    A = world["A"]
+    # Port 1 is reserved and nothing listens on it, so delivery fails fast.
+    hook = client.post("/api/spaces/WEB/webhooks", json={"url": "http://127.0.0.1:1/dead"}, headers=A).json()
+    r = client.post("/api/spaces/WEB/items", json={"title": "Still works"}, headers=A)
+    assert r.status_code == 200 and r.json()["title"] == "Still works"
+    for _ in range(50):
+        row = client.get("/api/spaces/WEB/webhooks", headers=A).json()["webhooks"][0]
+        if row["last_error"]:
+            break
+        _time.sleep(0.1)
+    assert row["last_error"], "the failure should be recorded on the hook"
+    client.delete(f"/api/webhooks/{hook['id']}", headers=A)
+
+
 def test_profile_admin_and_delete(client, world):
     A, B = world["A"], world["B"]
     assert client.patch("/api/me", json={"current_password": "wrong", "new_password": "newpassword"}, headers=B).status_code == 403

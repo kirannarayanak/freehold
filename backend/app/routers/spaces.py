@@ -1,5 +1,6 @@
 """Spaces, members, sprints, saved filters and the activity feed."""
 import re
+import secrets
 from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,13 +8,13 @@ from pydantic import BaseModel
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from .. import config
+from .. import config, webhooks
 from ..db import get_db, utcnow
 from ..models import (DEFAULT_STATUSES, ROLES, Attachment, History, Membership, SavedFilter, Space, Sprint, User,
-                      Version, WorkItem)
+                      Version, Webhook, WorkItem)
 from ..security import current_user, get_space, space_role
-from ..services import (category, counts, item_to_dict, record, space_links, space_to_dict, sprint_to_dict,
-                        user_to_dict, version_to_dict)
+from ..services import (category, counts, iso, item_to_dict, record, space_links, space_to_dict,
+                        sprint_to_dict, user_to_dict, version_to_dict)
 
 router = APIRouter(prefix="/api", tags=["spaces"])
 KEY_RE = re.compile(r"^[A-Z][A-Z0-9]{1,9}$")
@@ -367,6 +368,99 @@ def delete_version(version_id: int, user: User = Depends(current_user), db: Sess
     db.delete(version)
     db.commit()
     return {"ok": True}
+
+
+class WebhookIn(BaseModel):
+    url: str
+    events: list[str] = []
+
+
+class WebhookPatch(BaseModel):
+    url: str | None = None
+    events: list[str] | None = None
+    active: bool | None = None
+
+
+def _hook_to_dict(h: Webhook, secret: str | None = None) -> dict:
+    """The secret is returned once, when it is created. After that only whether one is set,
+    because an admin screen that shows every signing secret is a secret-leaking screen."""
+    d = {"id": h.id, "url": h.url, "events": h.events, "active": h.active, "has_secret": bool(h.secret),
+         "last_status": h.last_status, "last_error": h.last_error, "last_at": iso(h.last_at)}
+    if secret:
+        d["secret"] = secret
+    return d
+
+
+def _check_events(events: list[str]) -> list[str]:
+    bad = [e for e in events if e not in webhooks.EVENT_NAMES]
+    if bad:
+        raise HTTPException(422, f"Unknown event(s): {', '.join(bad)}. "
+                                 f"Valid events are {', '.join(webhooks.EVENT_NAMES)}.")
+    return events
+
+
+def _hook(db: Session, hook_id: int, user: User) -> tuple[Webhook, Space]:
+    hook = db.get(Webhook, hook_id)
+    if not hook:
+        raise HTTPException(404, "That webhook was not found.")
+    space = db.get(Space, hook.space_id)
+    get_space(db, space.key, user, need="admin")
+    return hook, space
+
+
+@router.get("/spaces/{key}/webhooks")
+def list_webhooks(key: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    space, _ = get_space(db, key, user, need="admin")
+    rows = db.scalars(select(Webhook).where(Webhook.space_id == space.id).order_by(Webhook.id))
+    return {"webhooks": [_hook_to_dict(h) for h in rows], "events": [list(e) for e in webhooks.EVENTS]}
+
+
+@router.post("/spaces/{key}/webhooks")
+def create_webhook(key: str, body: WebhookIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    space, _ = get_space(db, key, user, need="admin")
+    url = body.url.strip()
+    if not url.startswith(("http://", "https://")):
+        raise HTTPException(422, "A webhook URL must start with http:// or https://")
+    secret = secrets.token_urlsafe(32)
+    hook = Webhook(space_id=space.id, url=url[:500], secret=secret, events=_check_events(body.events), active=True)
+    db.add(hook)
+    db.commit()
+    return _hook_to_dict(hook, secret=secret)
+
+
+@router.patch("/webhooks/{hook_id}")
+def update_webhook(hook_id: int, body: WebhookPatch, user: User = Depends(current_user),
+                   db: Session = Depends(get_db)):
+    hook, _ = _hook(db, hook_id, user)
+    if body.url is not None:
+        url = body.url.strip()
+        if not url.startswith(("http://", "https://")):
+            raise HTTPException(422, "A webhook URL must start with http:// or https://")
+        hook.url = url[:500]
+    if body.events is not None:
+        hook.events = _check_events(body.events)
+    if body.active is not None:
+        hook.active = body.active
+    db.commit()
+    return _hook_to_dict(hook)
+
+
+@router.delete("/webhooks/{hook_id}")
+def delete_webhook(hook_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    hook, _ = _hook(db, hook_id, user)
+    db.delete(hook)
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/webhooks/{hook_id}/test")
+def test_webhook(hook_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Send a ping so an admin can confirm the receiver works before relying on it."""
+    hook, space = _hook(db, hook_id, user)
+    webhooks.deliver(db, space, "item.updated",
+                     {"test": True, "item": {"key": f"{space.key}-0", "title": "Test ping from Freehold"},
+                      "actor": user.handle})
+    return {"ok": True, "note": "Queued. Check the hook's last status in a moment."}
 
 
 @router.post("/spaces/{key}/sprints")
