@@ -36,6 +36,9 @@ frontend/ (plain JavaScript, no build step, no CDNs, classic scripts sharing glo
 
 - The CSP forbids inline scripts and handlers. Wire events with `data-act` (click), `data-change`, `data-form` (submit) and `data-drop` attributes and the `ACT`, `CHG`, `FORMS` and `DROP` maps in app.js.
 - Escape all user text with `MD.esc` or render it with `MD.render`. Never build HTML from raw user input.
+- Colour tokens come in pairs: `--danger`/`--done` are for fills, `--danger-ink`/`--done-ink` for text.
+  Text needs 4.5:1 against `--paper` and `--paper-2` in both themes; fills do not. White text sits on
+  `--iris-btn`, never on `--iris`, which is tuned for links and is too light in dark mode.
 - Read form fields with `fld(form, name)`, not `form.name` (in browsers that returns the form's own name attribute).
 - Keep the frontend dependency-free so it runs on networks without internet access.
 - Timestamps are naive UTC in the database (`db.utcnow()`); date-only fields travel as ISO strings.
