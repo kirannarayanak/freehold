@@ -52,16 +52,22 @@ def category(space: Space, status: str) -> str:
 
 def counts(db: Session, item_ids: list[int]) -> dict:
     if not item_ids:
-        return {"comments": {}, "attachments": {}}
+        return {"comments": {}, "attachments": {}, "status_since": {}}
     c = dict(db.execute(select(Comment.item_id, func.count()).where(Comment.item_id.in_(item_ids))
                         .group_by(Comment.item_id)).all())
     a = dict(db.execute(select(Attachment.item_id, func.count()).where(Attachment.item_id.in_(item_ids))
                         .group_by(Attachment.item_id)).all())
-    return {"comments": c, "attachments": a}
+    # When the status last changed, which is what "stale" is measured from. Age is the wrong
+    # number: an item opened a year ago and worked on yesterday is not stale.
+    since = dict(db.execute(select(History.item_id, func.max(History.at))
+                            .where(History.item_id.in_(item_ids),
+                                   History.field.in_(("created", "status")))
+                            .group_by(History.item_id)).all())
+    return {"comments": c, "attachments": a, "status_since": since}
 
 
 def item_to_dict(item: WorkItem, cnt: dict | None = None) -> dict:
-    cnt = cnt or {"comments": {}, "attachments": {}}
+    cnt = cnt or {"comments": {}, "attachments": {}, "status_since": {}}
     return {
         "id": item.id, "key": item.key, "number": item.number, "type": item.type, "title": item.title,
         "description": item.description or "", "status": item.status, "priority": item.priority,
@@ -71,6 +77,7 @@ def item_to_dict(item: WorkItem, cnt: dict | None = None) -> dict:
         "labels": list(item.labels or []), "checklist": list(item.checklist or []),
         "parent_key": item.parent.key if item.parent else None, "sprint_id": item.sprint_id,
         "version_id": item.version_id,
+        "status_since": iso(cnt.get("status_since", {}).get(item.id) or item.updated_at),
         "rank": item.rank, "external_key": item.external_key, "created_at": iso(item.created_at),
         "updated_at": iso(item.updated_at), "resolved_at": iso(item.resolved_at),
         "comment_count": cnt["comments"].get(item.id, 0), "attachment_count": cnt["attachments"].get(item.id, 0),
@@ -119,7 +126,10 @@ def build_context(db: Session, spaces: list[Space], me: User, items: list[dict])
     for s in spaces:
         for st in s.statuses:
             cats.setdefault(st["name"], st.get("category", "todo"))
-    return Context(users=users, sprints=sprints, versions=versions, categories=cats,
+    stale_days = 14
+    for sp in spaces:
+        stale_days = int((sp.settings or {}).get("stale_days") or stale_days)
+    return Context(users=users, sprints=sprints, versions=versions, categories=cats, stale_days=stale_days,
                    parents={i["key"]: i["title"] for i in items},
                    blocked=blocked_keys(db, spaces), me=me.id, today=date.today())
 

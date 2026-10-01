@@ -466,6 +466,51 @@ def test_api_tokens(client, world):
     assert client.delete(f"/api/me/tokens/{mine['id']}", headers=world["B"]).status_code == 404
 
 
+def test_stale_detection(client, world):
+    """Stale means stuck, not old: measured from the last status change, and only while in progress."""
+    from datetime import timedelta as _td
+    from sqlalchemy import select
+    from app.db import SessionLocal, utcnow
+    from app.models import History, WorkItem
+
+    A = world["A"]
+    bundle = client.get("/api/spaces/WEB", headers=A).json()
+    doing = [s["name"] for s in bundle["space"]["statuses"] if s["category"] == "doing"][0]
+    todo = [s["name"] for s in bundle["space"]["statuses"] if s["category"] == "todo"][0]
+    done = [s["name"] for s in bundle["space"]["statuses"] if s["category"] == "done"][0]
+
+    moving = client.post("/api/spaces/WEB/items", json={"title": "Moving along"}, headers=A).json()
+    stuck = client.post("/api/spaces/WEB/items", json={"title": "Stuck for ages"}, headers=A).json()
+    finished = client.post("/api/spaces/WEB/items", json={"title": "Long since shipped"}, headers=A).json()
+    parked = client.post("/api/spaces/WEB/items", json={"title": "Never started"}, headers=A).json()
+    for it, status in ((moving, doing), (stuck, doing), (finished, done), (parked, todo)):
+        client.patch(f"/api/items/{it['key']}", json={"status": status}, headers=A)
+
+    # Backdate the status changes of the two that should look old.
+    long_ago = utcnow() - _td(days=40)
+    with SessionLocal() as db:
+        for key in (stuck["key"], finished["key"], parked["key"]):
+            item = db.scalar(select(WorkItem).where(WorkItem.key == key))
+            for h in db.scalars(select(History).where(History.item_id == item.id)):
+                h.at = long_ago
+        db.commit()
+
+    def keys(q):
+        r = client.get("/api/search", params={"q": q}, headers=A)
+        assert r.status_code == 200, r.text
+        return {i["key"] for i in r.json()["items"]}
+
+    stale = keys("is:stale")
+    assert stuck["key"] in stale, "work sitting in progress for 40 days should be stale"
+    assert moving["key"] not in stale, "work that moved today is not stale"
+    assert finished["key"] not in stale, "finished work is never stale"
+    assert parked["key"] not in stale, "not started is a backlog question, not a rot question"
+
+    # status_since is exposed so the browser can show the same thing without another request.
+    row = next(i for i in client.get("/api/spaces/WEB", headers=A).json()["items"] if i["key"] == stuck["key"])
+    assert row["status_since"].startswith(str(long_ago.year))
+
+
 def test_profile_admin_and_delete(client, world):
     A, B = world["A"], world["B"]
     assert client.patch("/api/me", json={"current_password": "wrong", "new_password": "newpassword"}, headers=B).status_code == 403

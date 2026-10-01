@@ -401,7 +401,8 @@ def search(q: str = "", space: str | None = None, limit: int = 200, user: User =
     if not spaces:
         return {"items": [], "total": 0}
     items = list(db.scalars(select(WorkItem).where(WorkItem.space_id.in_([s.id for s in spaces]))))
-    dicts = [item_to_dict(i) for i in items]
+    cnt = counts(db, [i.id for i in items])
+    dicts = [item_to_dict(i, cnt) for i in items]
     ctx = build_context(db, spaces, user, dicts)
     try:
         found = run(q, dicts, ctx)

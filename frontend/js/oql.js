@@ -166,13 +166,22 @@
     }
     return null;
   }
+  // Mirrors _is_stale in query.py: only work in progress rots, and it is measured from the last
+  // status change rather than from creation.
+  function isStale(it, ctx) {
+    if ((ctx.categories || {})[it.status] !== "doing" || !it.status_since) return false;
+    const moved = new Date(String(it.status_since).slice(0, 10));
+    if (isNaN(moved)) return false;
+    return Math.floor((ctx.today - moved) / 86400000) >= (ctx.staleDays || 14);
+  }
+
   function isCheck(value, it, ctx) {
     const v = value.toLowerCase(), done = ctx.categories[it.status] === "done";
     const checks = { open: !done, done, closed: done, resolved: done, blocked: ctx.blocked.has(it.key),
       overdue: !!it.due && it.due < ctx.todayIso && !done, unassigned: !it.assignee_ids.length, assigned: !!it.assignee_ids.length,
       mine: it.assignee_ids.includes(ctx.me), watching: (it.watcher_ids || []).includes(ctx.me),
       backlog: it.sprint_id == null, epic: it.type === "Epic",
-      unversioned: it.version_id == null };
+      unversioned: it.version_id == null, stale: isStale(it, ctx) };
     if (!(v in checks)) throw new QueryError("is:" + value + " is not supported. Try is:open, is:done, is:blocked, is:overdue or is:mine.");
     return checks[v];
   }
@@ -248,5 +257,5 @@
     return { items: out, ordered: order.length > 0 };
   }
 
-  window.OQL = { run, parse, QueryError, isoDay };
+  window.OQL = { run, parse, QueryError, isoDay, isStale };
 })();

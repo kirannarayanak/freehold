@@ -101,7 +101,8 @@
     S.users.forEach(u => (users[u.id] = { name: u.name, handle: u.handle, email: u.email }));
     const parents = {};
     S.items.forEach(i => (parents[i.key] = i.title));
-    return { users, sprints, versions, categories: cats, parents, blocked: blockedSet(), me: S.me.id, today: new Date() };
+    return { users, sprints, versions, categories: cats, parents, blocked: blockedSet(), me: S.me.id,
+      staleDays: (S.space && S.space.settings && S.space.settings.stale_days) || 14, today: new Date() };
   }
   /* Apply the filter bar. Returns {items, ordered}; shows errors under the input without blocking the view. */
   function filtered(items) {
@@ -306,6 +307,7 @@
     const kids = S.items.filter(c => c.parent_key === it.key);
     return '<article class="card' + (isDone(it) ? " is-done" : "") + '" draggable="' + canEdit() + '" data-drag="' + esc(it.key) + '" data-act="open" data-key="' + esc(it.key) + '" tabindex="0">' +
       '<div class="card-t">' + esc(it.title) + "</div>" +
+      (OQL.isStale && OQL.isStale(it, qctx()) ? '<div class="tags"><span class="flag flag-stale" title="No status change in ' + ((S.space.settings && S.space.settings.stale_days) || 14) + ' days">Stale</span></div>' : "") +
       ((epic || it.labels.length || blocked || overdue) ? '<div class="tags">' +
         (blocked ? '<span class="flag flag-block">Blocked</span>' : "") + (overdue ? '<span class="flag flag-late">Overdue</span>' : "") +
         (epic ? '<span class="chip epic">' + esc(epic.title) + "</span>" : "") +

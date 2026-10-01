@@ -41,6 +41,7 @@ class Context:
     parents: dict = field(default_factory=dict)      # key -> title
     blocked: set = field(default_factory=set)        # keys blocked by an unfinished item
     me: int | None = None
+    stale_days: int = 14
     today: date = field(default_factory=date.today)
 
 
@@ -270,6 +271,21 @@ def _strings(f, item, ctx):
     return None
 
 
+def _is_stale(item, ctx) -> bool:
+    """Sitting in the same status too long. Finished work is never stale, and neither is anything
+    still in a to-do column: not started is a backlog question, not a rot question."""
+    if ctx.categories.get(item["status"]) != "doing":
+        return False
+    since = item.get("status_since")
+    if not since:
+        return False
+    try:
+        moved = date.fromisoformat(str(since)[:10])
+    except ValueError:
+        return False
+    return (ctx.today - moved).days >= ctx.stale_days
+
+
 def _is(value, item, ctx):
     v = value.lower()
     done = ctx.categories.get(item["status"]) == "done"
@@ -281,6 +297,7 @@ def _is(value, item, ctx):
         "mine": ctx.me in item["assignee_ids"], "watching": ctx.me in item.get("watcher_ids", []),
         "backlog": item.get("sprint_id") is None, "epic": item["type"] == "Epic",
         "unversioned": item.get("version_id") is None,
+        "stale": _is_stale(item, ctx),
     }
     if v not in checks:
         raise QueryError(f"is:{value} is not supported. Try is:open, is:done, is:blocked, is:overdue or is:mine.")
