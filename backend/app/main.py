@@ -51,6 +51,11 @@ async def security_headers(request: Request, call_next):
             "Content-Security-Policy",
             "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; "
             "script-src 'self'; connect-src 'self'; frame-ancestors 'self'")
+        # The frontend has no build step, so filenames never change between releases. Without this
+        # a browser may reuse cached JavaScript after an upgrade and run it against the new API,
+        # which looks like random breakage that a hard refresh "fixes". no-cache means revalidate,
+        # not don't store: the ETag above turns each check into a 304.
+        response.headers.setdefault("Cache-Control", "no-cache")
     return response
 
 
