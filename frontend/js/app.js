@@ -29,6 +29,15 @@
   const today = () => OQL.isoDay(new Date());
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   function fmtDay(d) { if (!d) return ""; const [y, m, day] = d.slice(0, 10).split("-"); return +day + " " + MONTHS[+m - 1] + (y !== String(new Date().getFullYear()) ? " " + y : ""); }
+  const DRAFT = "freehold.draft.";
+  function draftKey(kind) { return DRAFT + (S.openKey || "new") + "." + kind; }
+  function saveDraft(kind, text) {
+    try { text && text.trim() ? localStorage.setItem(draftKey(kind), text) : localStorage.removeItem(draftKey(kind)); }
+    catch (e) { /* private mode, or the quota is full: a draft is a convenience, never a requirement */ }
+  }
+  function readDraft(kind) { try { return localStorage.getItem(draftKey(kind)) || ""; } catch (e) { return ""; } }
+  function clearDraft(kind) { try { localStorage.removeItem(draftKey(kind)); } catch (e) {} }
+
   function ago(iso) {
     const s = (Date.now() - ts(iso)) / 1000;
     if (isNaN(s)) return "";
@@ -665,7 +674,7 @@
     const desc = S.descEdit
       ? '<div class="md-edit"><div class="tabs"><button class="tab' + (!S.descPreview ? " on" : "") + '" data-act="descTab" data-p="0">Write</button><button class="tab' + (S.descPreview ? " on" : "") + '" data-act="descTab" data-p="1">Preview</button><span class="grow"></span><span class="muted small">Markdown: **bold**, `code`, - [ ] task, @mention, KEY-12</span></div>' +
         (S.descPreview ? '<div class="md prev">' + (MD.render(S.descDraft, mdCtx()) || '<p class="muted">Nothing to preview.</p>') + "</div>"
-          : '<textarea id="descBox" class="md-box" data-mention rows="10" placeholder="Describe the work. Markdown works here.">' + esc(S.descDraft) + "</textarea>") +
+          : '<textarea id="descBox" class="md-box" data-mention data-draft="description" rows="10" placeholder="Describe the work. Markdown works here.">' + esc(readDraft("description") || S.descDraft) + "</textarea>") +
         '<div class="row-actions"><button class="btn sm" data-act="saveDesc">Save</button><button class="btn ghost sm" data-act="cancelDesc">Cancel</button><span class="muted small">Ctrl Enter saves</span></div></div>'
       : '<div class="md desc' + (ro ? "" : " editable") + '"' + (ro ? "" : ' data-act="editDesc" tabindex="0" title="Click to edit"') + ">" +
         (it.description ? MD.render(it.description, mdCtx()) : '<p class="muted">' + (ro ? "No description." : "Add a description…") + "</p>") + "</div>";
@@ -676,7 +685,9 @@
         ((c.author_id === me || isAdmin()) && !ro ? '<span class="grow"></span><button class="linkish small" data-act="editComment" data-id="' + c.id + '">Edit</button><button class="linkish small danger" data-act="deleteComment" data-id="' + c.id + '">Delete</button>' : "") + "</div>" +
         (S.editComment === c.id ? '<textarea class="md-box" id="cEdit" data-mention rows="4">' + esc(c.body) + '</textarea><div class="row-actions"><button class="btn sm" data-act="saveComment" data-id="' + c.id + '">Save</button><button class="btn ghost sm" data-act="cancelComment">Cancel</button></div>'
           : '<div class="md">' + MD.render(c.body, mdCtx()) + "</div>") + "</div>").join("") +
-        (ro ? "" : '<div class="cmt-new"><textarea id="cBody" class="md-box" data-mention rows="3" placeholder="Add a comment. Use @ to mention someone. Ctrl Enter posts."></textarea><div class="row-actions"><button class="btn sm" data-act="addComment">Comment</button></div></div>');
+        (ro ? "" : '<div class="cmt-new"><textarea id="cBody" class="md-box" data-mention data-draft="comment" rows="3" placeholder="Add a comment. Use @ to mention someone. Ctrl Enter posts.">' + esc(readDraft("comment")) + '</textarea>' +
+          (readDraft("comment") ? '<p class="muted small">Unsent draft restored.</p>' : "") +
+          '<div class="row-actions"><button class="btn sm" data-act="addComment">Comment</button></div></div>');
     } else if (S.dtab === "history") {
       tabBody = d.history.map(h => '<div class="hist"><b>' + esc(h.actor) + "</b> " + (h.field === "created" ? "created this in <b>" + esc(h.new) + "</b>" :
         h.field === "comment" ? "commented" : h.field === "description" ? "edited the description" :
@@ -1191,6 +1202,7 @@
       const box = $("#descBox");
       if (box) S.descDraft = box.value;
       S.descEdit = false;
+      clearDraft("description");
       await saveItem(S.detail.item.key, { description: S.descDraft });
     },
     dtab: el => { S.dtab = el.dataset.t; renderDialog(); },
@@ -1199,6 +1211,7 @@
       const body = box && box.value.trim();
       if (!body) return;
       box.disabled = true;
+      clearDraft("comment");
       await itemAction("/api/items/" + S.openKey + "/comments", { body });
     },
     editComment: el => { S.editComment = +el.dataset.id; renderDialog(); },
@@ -1519,6 +1532,11 @@
   });
   document.addEventListener("input", e => {
     const el = e.target;
+    if (el.dataset && el.dataset.draft) {
+      clearTimeout(S.draftTimer);
+      const kind = el.dataset.draft, text = el.value;
+      S.draftTimer = setTimeout(() => saveDraft(kind, text), 300);
+    }
     if (el.id === "q") {
       clearTimeout(S.qTimer);
       S.qTimer = setTimeout(() => { S.query = el.value; renderView(); }, 120);
