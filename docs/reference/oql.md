@@ -147,3 +147,26 @@ Named honestly. These are real gaps against JQL, tracked in the [feature matrix]
 - No subqueries
 - No visual query builder yet
 - Filters apply within one space; cross-space search is the command palette only
+
+## Custom fields
+
+Every custom field in a space is filterable by its key, which is shown next to the field in
+**Settings → Custom fields**. A field called Severity is `severity`:
+
+```
+severity = High
+severity in (High, Critical) AND is:open
+cost > 1000
+target_date < 2027-01-01
+teams = web                       a multiselect matches if any value matches
+regression = true                 a checkbox
+owner = me                        a user field, matching like assignee does
+customer ~ acme                   contains
+severity is empty
+```
+
+Numbers, dates and checkboxes compare by type rather than as text, so `cost > 900` does what it looks
+like. A user field matches by partial name, handle or `me`, exactly as `assignee` does.
+
+A custom field key can never shadow a built-in one: keys like `status` or `due` are refused when the
+field is created, so adding a field cannot quietly change what an existing filter means.

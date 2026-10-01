@@ -18,7 +18,7 @@ Status is honest and checked against the code, not aspirational:
 | Work items, boards, backlog, sprints, search, reports, notifications | Broadly at parity |
 | Permissions | Deliberately simpler than Jira, and sufficient |
 | Migration | Imports Jira CSV, with named gaps (attachments, links, custom fields) |
-| **Custom fields** | **Not built. The most-cited parity gap** |
+| Custom fields | Built |
 | Versions and releases | Built |
 | **Automation** | **Not built. The largest single functional block Jira has and we do not** |
 | **Development tooling** (branches, PRs, builds) | **Not built. Why engineers tolerate Jira** |
@@ -57,7 +57,7 @@ Status is honest and checked against the code, not aspirational:
 | Components | Yes | **Planned** | Labels cover most of it today |
 | Versions / fix version / releases | Yes | **Built** | Named releases with dates, fix version on work, release gated on unfinished work, archive, safe delete |
 | Environment field | Yes | **Deliberate no** | A label or custom field does this |
-| Custom fields | Yes | **Planned** | Biggest single parity gap |
+| Custom fields | Yes | **Built** | Eight types, validated, filterable by key, history by name. Values in JSON on the item |
 
 ### Hierarchy
 

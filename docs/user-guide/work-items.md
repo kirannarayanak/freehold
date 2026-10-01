@@ -55,6 +55,22 @@ Two things resolve automatically:
 
 All user text is escaped before rendering, so a description can never inject HTML.
 
+## Custom fields
+
+A space admin can add extra fields under **Settings → Custom fields**: text, number, date, single
+select, multi select, checkbox, URL, or a person. They appear on every work item in that space,
+alongside the built-in fields.
+
+Each field has a **key**, shown next to it in settings, and that key is how you filter on it:
+`severity = High`. See [OQL](../reference/oql.md).
+
+Two things worth knowing:
+
+- **A field's type cannot change once it exists.** The key is what values are stored under, so changing
+  the type would reinterpret everything already saved. Archive the field and add a new one instead.
+- **Archiving hides a field without losing data.** Values stay on the items and stay readable. Deleting
+  the definition leaves the values orphaned, which is why archiving is offered first.
+
 ## Links
 
 Relate items from the Links section:
