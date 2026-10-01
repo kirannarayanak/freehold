@@ -19,6 +19,8 @@ For contrast, these were blocked an hour ago and are not any more.
 | **Personal access tokens** | Nothing | Built. Hash-only storage, optional expiry |
 | **Draft recovery** | Nothing | Built. Comments and descriptions survive navigation |
 | **Release notes** | Needed versions to exist | Built, generated from what is in the version |
+| **Stale-work detection** | Nothing | Built. Measured from the last status change, not age |
+| **Bulk change from a query** | Nothing — it already worked | Filter, select all, change. The matrix was wrong, not the code |
 | **Versions and releases** | Needed a new column on an existing table, which `create_all` can never add | Migrations landed first |
 | **Login rate limiting** | Nothing | Built; a live security gap closed |
 | **Markdown tables** | Nothing | Built, escape-first, with alignment |
@@ -54,7 +56,6 @@ Nothing external needed. Listed in the order I would build them.
 | Feature | Why not now | Cost | Later? |
 |---|---|---|---|
 | **Custom fields** | Size. Touches the model, API, OQL, both parsers, the UI and the importer | 1–2 weeks | **Yes — the biggest parity gap** |
-| **Stale-work detection** | Time. Time-in-status is already derivable from history | 2 days | Yes, cheap and beyond Jira |
 | **Catch-up view** | Time. The data exists today | 3 days | Yes, beyond Jira |
 | **Automation rules** | Needs webhooks first. Largest block Jira has that we do not | 2–3 weeks | Yes, deliberately smaller than Jira's |
 | **Dashboards** | Size. Opening on a board instead is defensible | 1–2 weeks | Yes |
@@ -67,7 +68,6 @@ Nothing external needed. Listed in the order I would build them.
 | **Visual query builder** | Size. Turns OQL from a barrier into the reason to stay | 1 week | Yes, high value |
 | **Regex and subqueries in OQL** | Time. A named JQL limitation we can beat | 3 days | Yes |
 | **Filter subscriptions** | Time. Digests exist but not over a saved filter | 2 days | Yes |
-| **Bulk change from a query** | Time. Bulk edit works from selection, not from the filter | 1 day | Yes, easy |
 | **Parallel sprints** | Time | 2 days | Yes |
 | **Cross-space reporting** | Size | 1 week | Yes |
 | **Item templates** | Time | 2 days | Yes |
@@ -191,7 +191,6 @@ them.
 | **Webhooks out** | 1–2 days | The integration floor. Automation, git integration and chat all sit on it, so it unblocks the most |
 | **Personal access tokens** | 1 day | Scripts currently have to log in as a human with a password. Small, and it makes the API genuinely usable |
 | **Custom fields** | 1–2 weeks | The most-cited parity gap. Large because it touches the model, the API, OQL, both parsers, the UI and the importer |
-| **Stale-work detection** | 2 days | Beyond Jira, and cheap: time-in-status is already derivable from the history table, which we never delete |
 | **Catch-up view** | 3 days | "What changed while I was away." Nothing does this well. The data exists today |
 | **Draft recovery** | 1 day | Pure frontend, `localStorage`. Disproportionately appreciated |
 | **Automation rules** | 2–3 weeks | The largest block Jira has that we do not. Needs webhooks first, and needs to stay deliberately smaller than Jira's |

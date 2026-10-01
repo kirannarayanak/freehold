@@ -298,7 +298,7 @@ The quiet things people only notice when missing.
 | Personal access tokens for scripts | Yes | **Built** | `fh_` tokens, hash-only storage, optional expiry, use timestamped |
 | Email-to-item (create and comment by email) | Yes | **Not built** | |
 | Filter subscriptions (emailed on a schedule) | Yes | **Not built** | Digests exist, but not over a saved filter |
-| Bulk change driven by a query | Yes | **Partial** | Bulk edit works from the list selection, not from a query |
+| Bulk change driven by a query | Yes | **Built** | Filter in the List view, select all, then change status, priority, assignee or sprint in one action. The selection follows the filter |
 | Archive items and spaces | Yes | **Not built** | |
 | Localisation | ~25 languages | **Not built** | English only. Blocks non-English teams outright |
 | Accessibility | Partial, audited | **Partial** | Keyboard reachable, labelled, focus rings, contrast verified. No screen-reader audit |
