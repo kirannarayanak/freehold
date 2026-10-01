@@ -56,6 +56,7 @@ Full documentation is in [docs/](docs/README.md).
 | [REST API](docs/reference/rest-api.md) | |
 | [Configuration](docs/admin-guide/configuration.md) | Every environment variable |
 | [Feature matrix](docs/product/feature-matrix.md) | Jira parity, real gaps, and what we will not build |
+| [What we cannot build yet](docs/product/not-yet.md) | Why each gap is still a gap, and what unblocks it |
 
 ## What's in the beta
 

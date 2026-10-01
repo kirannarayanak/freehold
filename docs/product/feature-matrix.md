@@ -19,12 +19,12 @@ Status is honest and checked against the code, not aspirational:
 | Permissions | Deliberately simpler than Jira, and sufficient |
 | Migration | Imports Jira CSV, with named gaps (attachments, links, custom fields) |
 | **Custom fields** | **Not built. The most-cited parity gap** |
-| **Versions and releases** | **Not built. Blocks versioned software** |
+| Versions and releases | Built |
 | **Automation** | **Not built. The largest single functional block Jira has and we do not** |
 | **Development tooling** (branches, PRs, builds) | **Not built. Why engineers tolerate Jira** |
 | **Dashboards** | **Not built** |
-| **SSO, rate limiting, password reset** | **Not built. Blocks company adoption** |
-| **Schema migrations** | **Not built. Blocks safe upgrades, so it blocks everything** |
+| **SSO and password reset** | **Not built. Blocks company adoption.** Rate limiting is now built |
+| Schema migrations | Built. Upgrades are safe now |
 | Service management (portal, SLAs) | Out of scope. Freehold is a tracker, not a service desk |
 
 ---
@@ -54,7 +54,7 @@ Status is honest and checked against the code, not aspirational:
 | Voting | Yes | **Deliberate no** | Vote counts drive politics, not prioritisation |
 | Resolution separate from status | Yes | **Planned** | Jira's status/resolution split confuses everyone; needs a better design |
 | Components | Yes | **Planned** | Labels cover most of it today |
-| Versions / fix version / releases | Yes | **Planned** | Real gap for anyone shipping versioned software |
+| Versions / fix version / releases | Yes | **Built** | Named releases with dates, fix version on work, release gated on unfinished work, archive, safe delete |
 | Environment field | Yes | **Deliberate no** | A label or custom field does this |
 | Custom fields | Yes | **Planned** | Biggest single parity gap |
 
@@ -63,7 +63,7 @@ Status is honest and checked against the code, not aspirational:
 | Capability | Jira | Freehold | Notes |
 |---|---|---|---|
 | Epic → Story → Subtask | Yes | **Built** | |
-| Arbitrary nesting depth | No | **Planned** | [JRA-4446](https://jira.atlassian.com/browse/JRA-4446) has 1,000+ votes and is still open |
+| Arbitrary nesting depth | **No** | **Built** | A subtask of a subtask works, to any depth, cycles rejected. [JRA-4446](https://jira.atlassian.com/browse/JRA-4446) has 1,000+ votes and is still open in Jira |
 | Cross-project parents | Advanced Roadmaps only | **Planned** | |
 
 ### Workflow
@@ -114,7 +114,7 @@ Status is honest and checked against the code, not aspirational:
 | SSO / SAML / OIDC | Paid tiers | **Planned** | Table stakes for company adoption |
 | LDAP / Active Directory | Data Center | **Planned** | |
 | Two-factor auth | Yes | **Planned** | |
-| Login rate limiting | Yes | **Planned** | Security gap today |
+| Login rate limiting | Yes | **Built** | Per address and per address+email. In-memory, so still put a limiter at the proxy |
 | Password reset by email | Yes | **Planned** | Admin-set passwords only today |
 | Global audit log | Yes | **Partial** | Per-item history exists; no instance-wide view |
 
@@ -135,7 +135,7 @@ Status is honest and checked against the code, not aspirational:
 |---|---|---|---|
 | One-command install | No | **Built** | `docker compose up -d` |
 | Self-hosted | **Ending** | **Built** | New Data Center sales closed 30 Mar 2026 |
-| Schema migrations | Yes | **Planned** | `create_all` today; needs Alembic before 1.0 |
+| Schema migrations | Yes | **Built** | Alembic at startup. Databases predating migrations are adopted automatically |
 | Backup and restore | Yes | **Partial** | JSON export per space; no instance-wide backup command |
 | Archiving projects | Yes | **Planned** | |
 | Instance-wide settings UI | Yes | **Partial** | Environment variables |
@@ -232,13 +232,14 @@ Jira's dev panel is why engineers tolerate Jira. This is a complete gap.
 
 | Capability | Jira | Freehold | Notes |
 |---|---|---|---|
-| Versions per project | Yes | **Not built** | |
-| Fix version / affects version | Yes | **Not built** | |
-| Release hub (what is in this release) | Yes | **Not built** | |
-| Generated release notes | Yes | **Not built** | |
-| Archive a version | Yes | **Not built** | |
-
-Blocks anyone shipping versioned software. High priority.
+| Versions per project | Yes | **Built** | Name, description, release date, unique per space |
+| Fix version on work | Yes | **Built** | Recorded in history by name, so the trail survives a rename |
+| Release gating | Partial | **Built** | A version refuses to be released while work in it is unfinished. Jira only warns |
+| Archive a version | Yes | **Built** | Archived versions stop accepting new work |
+| Safe delete | Yes | **Built** | Deleting a version never deletes the work in it |
+| Release hub view | Yes | **Partial** | The API is complete; there is no dedicated release screen yet |
+| Generated release notes | Yes | **Planned** | The data is all there now |
+| Affects version | Yes | **Planned** | |
 
 ### Planning and roadmaps
 
@@ -258,7 +259,7 @@ Jira gates all of this behind Premium. That makes it a fair target rather than a
 | Capability | Jira | Freehold | Notes |
 |---|---|---|---|
 | Rich text editing | WYSIWYG | **Built** (markdown) | Markdown with live preview. A deliberate difference, not a gap |
-| Tables in descriptions | Yes | **Planned** | Markdown tables are not rendered yet |
+| Tables in descriptions | Yes | **Built** | With column alignment, escape-first like the rest of the renderer |
 | Inline images | Yes | **Built** | |
 | Mentions | Yes | **Built** | |
 | Item templates | Add-on | **Planned** | |

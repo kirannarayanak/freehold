@@ -53,3 +53,4 @@ what works today and what does not.
 | | |
 |---|---|
 | [Feature matrix](product/feature-matrix.md) | Jira parity, gaps, and what we deliberately will not build |
+| [What we cannot build yet](product/not-yet.md) | Why each gap is still a gap, what unblocks it, and what it costs |
