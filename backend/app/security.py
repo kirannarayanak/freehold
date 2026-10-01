@@ -1,0 +1,103 @@
+"""Passwords, tokens and permission checks."""
+import base64
+import hashlib
+import hmac
+import os
+import re
+from datetime import timedelta
+
+import jwt
+from fastapi import Depends, HTTPException, Request
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from . import config
+from .db import get_db, utcnow
+from .models import Membership, Space, User
+
+ROLE_ORDER = {"viewer": 0, "member": 1, "admin": 2}
+_SCRYPT = dict(n=2**14, r=8, p=1, dklen=32)
+
+
+def hash_password(password: str) -> str:
+    salt = os.urandom(16)
+    digest = hashlib.scrypt(password.encode(), salt=salt, **_SCRYPT)
+    return "scrypt$" + base64.b64encode(salt).decode() + "$" + base64.b64encode(digest).decode()
+
+
+def verify_password(password: str, stored: str) -> bool:
+    try:
+        _, salt_b64, digest_b64 = stored.split("$")
+        salt = base64.b64decode(salt_b64)
+        expected = base64.b64decode(digest_b64)
+    except ValueError:
+        return False
+    digest = hashlib.scrypt(password.encode(), salt=salt, **_SCRYPT)
+    return hmac.compare_digest(digest, expected)
+
+
+def create_token(user: User) -> str:
+    payload = {"sub": str(user.id), "exp": utcnow() + timedelta(hours=config.TOKEN_HOURS)}
+    return jwt.encode(payload, config.SECRET_KEY, algorithm="HS256")
+
+
+def _user_from_token(token: str, db: Session) -> User:
+    try:
+        payload = jwt.decode(token, config.SECRET_KEY, algorithms=["HS256"])
+        user_id = int(payload["sub"])
+    except (jwt.PyJWTError, KeyError, ValueError):
+        raise HTTPException(401, "Your session has expired. Sign in again.")
+    user = db.get(User, user_id)
+    if not user or not user.is_active:
+        raise HTTPException(401, "This account is not active.")
+    return user
+
+
+def current_user(request: Request, db: Session = Depends(get_db)) -> User:
+    header = request.headers.get("authorization", "")
+    if not header.lower().startswith("bearer "):
+        raise HTTPException(401, "Sign in to continue.")
+    return _user_from_token(header[7:].strip(), db)
+
+
+def current_user_or_query_token(request: Request, db: Session = Depends(get_db)) -> User:
+    """Downloads opened with a plain link cannot send headers, so they may pass ?token=."""
+    header = request.headers.get("authorization", "")
+    if header.lower().startswith("bearer "):
+        return _user_from_token(header[7:].strip(), db)
+    token = request.query_params.get("token")
+    if not token:
+        raise HTTPException(401, "Sign in to continue.")
+    return _user_from_token(token, db)
+
+
+def require_site_admin(user: User = Depends(current_user)) -> User:
+    if not user.is_admin:
+        raise HTTPException(403, "Only site admins can do this.")
+    return user
+
+
+def space_role(db: Session, space: Space, user: User) -> str | None:
+    if user.is_admin:
+        return "admin"
+    m = db.get(Membership, (space.id, user.id))
+    return m.role if m else None
+
+
+def get_space(db: Session, key: str, user: User, need: str = "viewer") -> tuple[Space, str]:
+    space = db.scalar(select(Space).where(Space.key == key.upper()))
+    role = space_role(db, space, user) if space else None
+    if not space or role is None:
+        raise HTTPException(404, f"Space {key.upper()} was not found or you are not a member.")
+    if ROLE_ORDER[role] < ROLE_ORDER[need]:
+        raise HTTPException(403, f"You need the {need} role in {space.key} to do this.")
+    return space, role
+
+
+def make_handle(db: Session, name: str, email: str) -> str:
+    base = re.sub(r"[^a-z0-9._-]", "", (name or email.split("@")[0]).lower().replace(" ", "."))[:40] or "user"
+    handle, n = base, 1
+    while db.scalar(select(User.id).where(User.handle == handle)):
+        n += 1
+        handle = f"{base}{n}"
+    return handle

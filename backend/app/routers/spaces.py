@@ -1,0 +1,399 @@
+"""Spaces, members, sprints, saved filters and the activity feed."""
+import re
+from datetime import date, datetime, timedelta
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import delete, func, select
+from sqlalchemy.orm import Session
+
+from .. import config
+from ..db import get_db, utcnow
+from ..models import (DEFAULT_STATUSES, ROLES, Attachment, History, Membership, SavedFilter, Space, Sprint, User,
+                      WorkItem)
+from ..security import current_user, get_space, space_role
+from ..services import (category, counts, item_to_dict, record, space_links, space_to_dict, sprint_to_dict,
+                        user_to_dict)
+
+router = APIRouter(prefix="/api", tags=["spaces"])
+KEY_RE = re.compile(r"^[A-Z][A-Z0-9]{1,9}$")
+
+
+class SpaceIn(BaseModel):
+    key: str
+    name: str
+    description: str = ""
+    template: str = "scrum"  # scrum | kanban
+
+
+class SpacePatch(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    statuses: list[dict] | None = None
+    status_map: dict | None = None
+    settings: dict | None = None
+
+
+class MemberIn(BaseModel):
+    email: str | None = None
+    user_id: int | None = None
+    role: str = "member"
+
+
+class RoleIn(BaseModel):
+    role: str
+
+
+class SprintIn(BaseModel):
+    name: str | None = None
+    goal: str = ""
+    start: str | None = None
+    end: str | None = None
+
+
+class SprintPatch(BaseModel):
+    name: str | None = None
+    goal: str | None = None
+    start: str | None = None
+    end: str | None = None
+    state: str | None = None
+
+
+class CompleteIn(BaseModel):
+    move_to: str | int = "backlog"  # backlog | next | <sprint id>
+
+
+class FilterIn(BaseModel):
+    name: str
+    query: str
+    shared: bool = False
+
+
+def _date(value, label):
+    if value in (None, ""):
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        raise HTTPException(422, f"{label} must be a date like 2026-10-01.")
+
+
+def _members(db: Session, space: Space) -> list[dict]:
+    rows = db.execute(select(Membership, User).join(User, User.id == Membership.user_id)
+                      .where(Membership.space_id == space.id).order_by(User.name)).all()
+    return [dict(user_to_dict(u), role=m.role) for m, u in rows]
+
+
+def _filters(db: Session, space: Space, user: User) -> list[dict]:
+    rows = db.scalars(select(SavedFilter).where(SavedFilter.space_id == space.id)
+                      .where((SavedFilter.owner_id == user.id) | (SavedFilter.shared.is_(True))).order_by(SavedFilter.name))
+    return [{"id": f.id, "name": f.name, "query": f.query, "shared": f.shared, "mine": f.owner_id == user.id}
+            for f in rows]
+
+
+@router.get("/spaces")
+def list_spaces(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    if user.is_admin:
+        spaces = db.scalars(select(Space).order_by(Space.name))
+        return [space_to_dict(s, "admin") for s in spaces]
+    rows = db.execute(select(Space, Membership.role).join(Membership, Membership.space_id == Space.id)
+                      .where(Membership.user_id == user.id).order_by(Space.name)).all()
+    return [space_to_dict(s, role) for s, role in rows]
+
+
+@router.post("/spaces")
+def create_space(body: SpaceIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    key = body.key.strip().upper()
+    if not KEY_RE.match(key):
+        raise HTTPException(422, "Use a key of 2 to 10 letters or digits that starts with a letter, like WEB.")
+    if db.scalar(select(Space.id).where(Space.key == key)):
+        raise HTTPException(409, f"The key {key} is already taken.")
+    if not body.name.strip():
+        raise HTTPException(422, "Give the space a name.")
+    statuses = [dict(s) for s in DEFAULT_STATUSES]
+    if body.template == "kanban":
+        statuses = [s for s in statuses if s["name"] != "In review"]
+    space = Space(key=key, name=body.name.strip()[:120], description=body.description, statuses=statuses,
+                  settings={"template": body.template})
+    db.add(space)
+    db.flush()
+    db.add(Membership(space_id=space.id, user_id=user.id, role="admin"))
+    if body.template != "kanban":
+        db.add(Sprint(space_id=space.id, name="Sprint 1", state="future"))
+    db.commit()
+    return space_to_dict(space, "admin")
+
+
+@router.get("/spaces/{key}")
+def space_bundle(key: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Everything the board needs in one request; the browser then works from memory."""
+    space, role = get_space(db, key, user)
+    items = list(db.scalars(select(WorkItem).where(WorkItem.space_id == space.id).order_by(WorkItem.rank)))
+    cnt = counts(db, [i.id for i in items])
+    sprints = db.scalars(select(Sprint).where(Sprint.space_id == space.id).order_by(Sprint.id))
+    return {
+        "space": space_to_dict(space, role), "members": _members(db, space),
+        "sprints": [sprint_to_dict(s) for s in sprints], "items": [item_to_dict(i, cnt) for i in items],
+        "links": space_links(db, space), "filters": _filters(db, space, user), "server_time": utcnow().isoformat(),
+    }
+
+
+@router.get("/spaces/{key}/changes")
+def space_changes(key: str, since: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Cheap polling: work items changed or deleted since a timestamp, plus the small lists."""
+    space, role = get_space(db, key, user)
+    try:
+        moment = datetime.fromisoformat(since)
+    except ValueError:
+        raise HTTPException(422, "since must be an ISO timestamp.")
+    now = utcnow()
+    items = list(db.scalars(select(WorkItem).where(WorkItem.space_id == space.id, WorkItem.updated_at > moment)))
+    cnt = counts(db, [i.id for i in items])
+    deleted = list(db.scalars(select(History.item_key).where(History.space_id == space.id,
+                                                             History.field == "deleted", History.at > moment)))
+    sprints = db.scalars(select(Sprint).where(Sprint.space_id == space.id).order_by(Sprint.id))
+    return {"space": space_to_dict(space, role), "items": [item_to_dict(i, cnt) for i in items], "deleted": deleted,
+            "sprints": [sprint_to_dict(s) for s in sprints], "links": space_links(db, space),
+            "members": _members(db, space), "server_time": now.isoformat()}
+
+
+@router.patch("/spaces/{key}")
+def update_space(key: str, body: SpacePatch, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    space, role = get_space(db, key, user, need="admin")
+    if body.name is not None:
+        if not body.name.strip():
+            raise HTTPException(422, "Give the space a name.")
+        space.name = body.name.strip()[:120]
+    if body.description is not None:
+        space.description = body.description
+    if body.settings is not None:
+        space.settings = {**(space.settings or {}), **body.settings}
+    if body.statuses is not None:
+        cleaned, seen = [], set()
+        for s in body.statuses:
+            name = str(s.get("name", "")).strip()[:60]
+            cat = s.get("category", "todo")
+            if not name or name.lower() in seen:
+                raise HTTPException(422, "Each status needs a unique name.")
+            if cat not in ("todo", "doing", "done"):
+                raise HTTPException(422, "A status category must be todo, doing or done.")
+            seen.add(name.lower())
+            cleaned.append({"name": name, "category": cat, "wip": max(0, int(s.get("wip") or 0))})
+        if len(cleaned) < 2:
+            raise HTTPException(422, "A workflow needs at least two statuses.")
+        if not any(s["category"] == "done" for s in cleaned):
+            raise HTTPException(422, "Mark at least one status as done so work can finish.")
+        names = {s["name"] for s in cleaned}
+        mapping = body.status_map or {}
+        space.statuses = cleaned
+        now = utcnow()
+        for item in db.scalars(select(WorkItem).where(WorkItem.space_id == space.id, WorkItem.status.not_in(names))):
+            target = mapping.get(item.status) if mapping.get(item.status) in names else cleaned[0]["name"]
+            record(db, item, user, "status", item.status, target)
+            item.status = target
+            item.resolved_at = item.resolved_at or now if category(space, target) == "done" else None
+            item.updated_at = now
+    db.commit()
+    return space_to_dict(space, role)
+
+
+@router.delete("/spaces/{key}")
+def delete_space(key: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    space, _ = get_space(db, key, user, need="admin")
+    item_ids = select(WorkItem.id).where(WorkItem.space_id == space.id)
+    for att in db.scalars(select(Attachment).where(Attachment.item_id.in_(item_ids))):
+        (config.UPLOAD_DIR / att.storage_name).unlink(missing_ok=True)
+    db.execute(delete(WorkItem).where(WorkItem.space_id == space.id).execution_options(synchronize_session=False))
+    db.delete(space)
+    db.commit()
+    return {"deleted": key.upper()}
+
+
+@router.get("/spaces/{key}/members")
+def list_members(key: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    space, _ = get_space(db, key, user)
+    return _members(db, space)
+
+
+@router.post("/spaces/{key}/members")
+def add_member(key: str, body: MemberIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    space, _ = get_space(db, key, user, need="admin")
+    if body.role not in ROLES:
+        raise HTTPException(422, "Role must be viewer, member or admin.")
+    target = db.get(User, body.user_id) if body.user_id else db.scalar(
+        select(User).where(User.email == (body.email or "").strip().lower()))
+    if not target:
+        raise HTTPException(404, "No account uses that email. A site admin can create it under Admin > People.")
+    existing = db.get(Membership, (space.id, target.id))
+    if existing:
+        existing.role = body.role
+    else:
+        db.add(Membership(space_id=space.id, user_id=target.id, role=body.role))
+    db.commit()
+    return _members(db, space)
+
+
+def _admins_left(db, space, excluding):
+    return db.scalar(select(func.count()).select_from(Membership).where(
+        Membership.space_id == space.id, Membership.role == "admin", Membership.user_id != excluding))
+
+
+@router.patch("/spaces/{key}/members/{user_id}")
+def change_role(key: str, user_id: int, body: RoleIn, user: User = Depends(current_user),
+                db: Session = Depends(get_db)):
+    space, _ = get_space(db, key, user, need="admin")
+    m = db.get(Membership, (space.id, user_id))
+    if not m:
+        raise HTTPException(404, "That person is not a member of this space.")
+    if body.role not in ROLES:
+        raise HTTPException(422, "Role must be viewer, member or admin.")
+    if m.role == "admin" and body.role != "admin" and not _admins_left(db, space, user_id):
+        raise HTTPException(422, "A space needs at least one admin.")
+    m.role = body.role
+    db.commit()
+    return _members(db, space)
+
+
+@router.delete("/spaces/{key}/members/{user_id}")
+def remove_member(key: str, user_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    space, _ = get_space(db, key, user, need="admin")
+    m = db.get(Membership, (space.id, user_id))
+    if not m:
+        raise HTTPException(404, "That person is not a member of this space.")
+    if m.role == "admin" and not _admins_left(db, space, user_id):
+        raise HTTPException(422, "A space needs at least one admin.")
+    db.delete(m)
+    db.commit()
+    return _members(db, space)
+
+
+def _sprint(db: Session, sprint_id: int, user: User, need="member") -> tuple[Sprint, Space]:
+    sprint = db.get(Sprint, sprint_id)
+    if not sprint:
+        raise HTTPException(404, "Sprint not found.")
+    space = db.get(Space, sprint.space_id)
+    get_space(db, space.key, user, need=need)
+    return sprint, space
+
+
+@router.post("/spaces/{key}/sprints")
+def create_sprint(key: str, body: SprintIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    space, _ = get_space(db, key, user, need="member")
+    n = db.scalar(select(func.count(Sprint.id)).where(Sprint.space_id == space.id)) + 1
+    sprint = Sprint(space_id=space.id, name=(body.name or f"Sprint {n}").strip()[:120], goal=body.goal,
+                    start_date=_date(body.start, "Start date"), end_date=_date(body.end, "End date"), state="future")
+    db.add(sprint)
+    db.commit()
+    return sprint_to_dict(sprint)
+
+
+@router.patch("/sprints/{sprint_id}")
+def update_sprint(sprint_id: int, body: SprintPatch, user: User = Depends(current_user),
+                  db: Session = Depends(get_db)):
+    sprint, space = _sprint(db, sprint_id, user)
+    if body.name is not None:
+        sprint.name = body.name.strip()[:120] or sprint.name
+    if body.goal is not None:
+        sprint.goal = body.goal
+    if body.start is not None:
+        sprint.start_date = _date(body.start, "Start date")
+    if body.end is not None:
+        sprint.end_date = _date(body.end, "End date")
+    if body.state == "active" and sprint.state != "active":
+        if sprint.state == "closed":
+            raise HTTPException(422, "A completed sprint cannot be restarted.")
+        if db.scalar(select(Sprint.id).where(Sprint.space_id == space.id, Sprint.state == "active")):
+            raise HTTPException(422, "Complete the active sprint before starting another.")
+        sprint.state = "active"
+        sprint.start_date = sprint.start_date or date.today()
+        sprint.end_date = sprint.end_date or sprint.start_date + timedelta(days=13)
+        sprint.committed_points = sum(i.points or 0 for i in db.scalars(
+            select(WorkItem).where(WorkItem.sprint_id == sprint.id)))
+    db.commit()
+    return sprint_to_dict(sprint)
+
+
+@router.post("/sprints/{sprint_id}/complete")
+def complete_sprint(sprint_id: int, body: CompleteIn, user: User = Depends(current_user),
+                    db: Session = Depends(get_db)):
+    sprint, space = _sprint(db, sprint_id, user)
+    if sprint.state != "active":
+        raise HTTPException(422, "Only the active sprint can be completed.")
+    items = list(db.scalars(select(WorkItem).where(WorkItem.sprint_id == sprint.id)))
+    done = [i for i in items if category(space, i.status) == "done"]
+    open_items = [i for i in items if i not in done]
+    target = None
+    if body.move_to == "next":
+        n = db.scalar(select(func.count(Sprint.id)).where(Sprint.space_id == space.id)) + 1
+        target = Sprint(space_id=space.id, name=f"Sprint {n}", state="future")
+        db.add(target)
+        db.flush()
+    elif body.move_to not in ("backlog", "", None):
+        target = db.get(Sprint, int(body.move_to))
+        if not target or target.space_id != space.id or target.state == "closed":
+            raise HTTPException(422, "Pick a future sprint in this space, or the backlog.")
+    now = utcnow()
+    for item in open_items:
+        record(db, item, user, "sprint", sprint.name, target.name if target else "Backlog")
+        item.sprint_id = target.id if target else None
+        item.updated_at = now
+    sprint.state = "closed"
+    sprint.closed_at = now
+    sprint.completed_points = sum(i.points or 0 for i in done)
+    db.commit()
+    return {"sprint": sprint_to_dict(sprint), "moved": len(open_items), "completed": len(done),
+            "next": sprint_to_dict(target) if target else None}
+
+
+@router.delete("/sprints/{sprint_id}")
+def delete_sprint(sprint_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    sprint, space = _sprint(db, sprint_id, user)
+    if sprint.state != "future":
+        raise HTTPException(422, "Only sprints that have not started can be deleted.")
+    now = utcnow()
+    for item in db.scalars(select(WorkItem).where(WorkItem.sprint_id == sprint.id)):
+        item.sprint_id = None
+        item.updated_at = now
+    db.delete(sprint)
+    db.commit()
+    return {"deleted": sprint_id}
+
+
+@router.get("/spaces/{key}/filters")
+def list_filters(key: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    space, _ = get_space(db, key, user)
+    return _filters(db, space, user)
+
+
+@router.post("/spaces/{key}/filters")
+def save_filter(key: str, body: FilterIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    space, _ = get_space(db, key, user)
+    if not body.name.strip() or not body.query.strip():
+        raise HTTPException(422, "A saved filter needs a name and a query.")
+    db.add(SavedFilter(space_id=space.id, owner_id=user.id, name=body.name.strip()[:120], query=body.query,
+                       shared=body.shared))
+    db.commit()
+    return _filters(db, space, user)
+
+
+@router.delete("/filters/{filter_id}")
+def delete_filter(filter_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    f = db.get(SavedFilter, filter_id)
+    if not f:
+        raise HTTPException(404, "Filter not found.")
+    space = db.get(Space, f.space_id)
+    if f.owner_id != user.id and space_role(db, space, user) != "admin":
+        raise HTTPException(403, "Only the owner or a space admin can delete this filter.")
+    db.delete(f)
+    db.commit()
+    return _filters(db, space, user)
+
+
+@router.get("/spaces/{key}/activity")
+def activity(key: str, limit: int = 60, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    space, _ = get_space(db, key, user)
+    rows = db.execute(select(History, User.name).outerjoin(User, User.id == History.actor_id)
+                      .where(History.space_id == space.id).order_by(History.at.desc(), History.id.desc())
+                      .limit(min(limit, 300))).all()
+    return [{"at": h.at.isoformat(), "actor": name or "Import", "key": h.item_key, "field": h.field,
+             "old": h.old_value, "new": h.new_value} for h, name in rows]
