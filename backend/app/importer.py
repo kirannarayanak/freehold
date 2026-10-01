@@ -123,11 +123,17 @@ def _backdate(db: Session, item: WorkItem, space: Space, created, updated, resol
     created = created or utcnow()
     item.created_at = created
     item.updated_at = updated or created
+    # create_item leaves its "created" row pending and the session does not autoflush, so flush
+    # first: otherwise the delete below cannot see that row and the item keeps two "created" rows,
+    # the later one dated now, which makes every report read the item back as its starting status.
+    db.flush()
     for h in db.scalars(select(History).where(History.item_id == item.id)):
         db.delete(h)
+    db.flush()
     record(db, item, None, "created", "", first_status)
     db.flush()
-    db.scalars(select(History).where(History.item_id == item.id)).first().at = created
+    db.scalars(select(History).where(History.item_id == item.id)
+               .order_by(History.id)).first().at = created
     if item.status != first_status:
         when = resolved if (resolved and category(space, item.status) == "done") else (updated or created)
         record(db, item, None, "status", first_status, item.status)

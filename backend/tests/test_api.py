@@ -208,6 +208,17 @@ def test_jira_import(client, world):
     assert {s["name"] for s in b["sprints"]} == {"SHOP Sprint 2"}
     detail = client.get("/api/items/SHOP-2", headers=A).json()
     assert detail["comments"][0]["body"] == "Looks good"
+    # Exactly one "created" row, dated when the work really started. A second row dated at import
+    # time would be the newest status event, so every history-based report would read imported
+    # items back as their starting status: a closed item would show as open from the import day on.
+    for key in ("SHOP-1", "SHOP-2", "SHOP-3"):
+        hist = client.get(f"/api/items/{key}", headers=A).json()["history"]
+        starts = [h for h in hist if h["field"] == "created"]
+        assert len(starts) == 1, f"{key} has {len(starts)} created rows"
+        assert starts[0]["at"].startswith("2026-09-0"), starts[0]["at"]
+        timeline = sorted((h for h in hist if h["field"] in ("created", "status")), key=lambda h: h["at"])
+        assert timeline[0]["field"] == "created"
+        assert timeline[-1]["new"] == items[key]["status"], f"{key} history ends on the wrong status"
 
 
 def test_prototype_and_export_roundtrip(client, world):
