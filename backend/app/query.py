@@ -37,6 +37,7 @@ class Context:
     users: dict = field(default_factory=dict)        # id -> {"name","handle","email"}
     sprints: dict = field(default_factory=dict)      # id -> {"name","state"}
     versions: dict = field(default_factory=dict)     # id -> {"name","released"}
+    custom: dict = field(default_factory=dict)       # custom field key -> type
     categories: dict = field(default_factory=dict)   # status name -> todo|doing|done
     parents: dict = field(default_factory=dict)      # key -> title
     blocked: set = field(default_factory=set)        # keys blocked by an unfinished item
@@ -268,6 +269,16 @@ def _strings(f, item, ctx):
         return [v["name"], "released" if v["released"] else "unreleased"] if v else ["none"]
     if f == "space":
         return [item["key"].split("-")[0]]
+    if f in ctx.custom:
+        raw = (item.get("custom") or {}).get(f)
+        if raw is None:
+            return []
+        if isinstance(raw, list):
+            return [str(v) for v in raw]
+        if ctx.custom[f] == "user":
+            who = ctx.users.get(raw)
+            return [who["name"], who["handle"]] if who else [str(raw)]
+        return [str(raw)]
     return None
 
 
@@ -304,7 +315,7 @@ def _is(value, item, ctx):
     return checks[v]
 
 
-def _empty(f, item):
+def _empty(f, item, ctx=None):
     if f == "assignee":
         return not item["assignee_ids"]
     if f == "reporter":
@@ -323,6 +334,9 @@ def _empty(f, item):
         return item.get(NUM_FIELDS[f]) in (None, 0)
     if f == "description":
         return not (item.get("description") or "").strip()
+    if ctx and f in ctx.custom:
+        v = (item.get("custom") or {}).get(f)
+        return v is None or v == "" or v == []
     raise QueryError(f"'{f}' cannot be checked for EMPTY.")
 
 
@@ -331,7 +345,7 @@ def _clause(name, op, values, item, ctx):
     if f == "is":
         return _is(values[0], item, ctx)
     if op in ("is", "is not"):
-        return _empty(f, item) == (op == "is")
+        return _empty(f, item, ctx) == (op == "is")
     if op in ("in", "not in"):
         hit = any(_clause(name, "=", [v], item, ctx) for v in values)
         return hit if op == "in" else not hit
@@ -339,7 +353,27 @@ def _clause(name, op, values, item, ctx):
         return not _clause(name, "=", values, item, ctx)
     value = values[0]
     if value.lower() in ("empty", "null") and op in ("=", ":"):
-        return _empty(f, item)
+        return _empty(f, item, ctx)
+    if f in ctx.custom and ctx.custom[f] == "user":
+        raw = (item.get("custom") or {}).get(f)
+        if raw is None:
+            return False
+        return _user_hit(raw, value, ctx, exact=False)
+    if f in ctx.custom and ctx.custom[f] in ("number", "date", "checkbox"):
+        raw = (item.get("custom") or {}).get(f)
+        if raw is None:
+            return False
+        kind = ctx.custom[f]
+        if kind == "number":
+            try:
+                return _compare(float(raw), op, float(value))
+            except (TypeError, ValueError):
+                raise QueryError(f"'{value}' is not a number, and {f} holds numbers.")
+        if kind == "date":
+            return _compare(date.fromisoformat(str(raw)[:10]), op, parse_date(value, ctx.today))
+        if kind == "checkbox":
+            want = value.lower() in ("true", "yes", "1")
+            return bool(raw) == want
     if f in DATE_FIELDS:
         raw = item.get(DATE_FIELDS[f])
         if not raw:

@@ -93,6 +93,35 @@ class Version(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+CUSTOM_FIELD_TYPES = ("text", "number", "date", "select", "multiselect", "checkbox", "url", "user")
+
+# A custom field is addressable in OQL by its key, so a key may not shadow anything built in,
+# otherwise `status = Done` would silently start meaning someone's custom field.
+RESERVED_FIELD_KEYS = {
+    "assignee", "assignees", "category", "created", "description", "due", "duedate", "epic",
+    "estimate", "fixversion", "fixversions", "is", "issuetype", "key", "label", "labels", "logged",
+    "parent", "points", "priority", "project", "rank", "release", "reporter", "resolved", "space",
+    "sprint", "start", "startdate", "status", "statuscategory", "storypoints", "summary", "text",
+    "title", "type", "updated", "version", "watcher", "watchers", "worktype",
+}
+
+
+class CustomField(Base):
+    """A per-space field definition. Values live in WorkItem.custom, keyed by this key."""
+    __tablename__ = "custom_fields"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    space_id: Mapped[int] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"), index=True)
+    key: Mapped[str] = mapped_column(String(40))
+    name: Mapped[str] = mapped_column(String(120))
+    type: Mapped[str] = mapped_column(String(20), default="text")
+    options: Mapped[list] = mapped_column(JSON, default=list)
+    description: Mapped[str] = mapped_column(Text, default="")
+    required: Mapped[bool] = mapped_column(Boolean, default=False)
+    archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class ApiToken(Base):
     """A long-lived token for scripts. Only the hash is stored, so a leaked database does not
     hand over working credentials and nobody, including an admin, can read the token back."""
@@ -141,6 +170,7 @@ class WorkItem(Base):
     start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     labels: Mapped[list] = mapped_column(JSON, default=list)
+    custom: Mapped[dict] = mapped_column(JSON, default=dict)
     checklist: Mapped[list] = mapped_column(JSON, default=list)
     parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("work_items.id", ondelete="SET NULL"), nullable=True)
     sprint_id: Mapped[Optional[int]] = mapped_column(ForeignKey("sprints.id", ondelete="SET NULL"), nullable=True)

@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 
 from . import notify
 from .db import utcnow
-from .models import (PRIORITIES, TYPES, Attachment, Comment, History, Link, Membership, Space, Sprint, User,
-                     Version, WorkItem)
+from .models import (PRIORITIES, TYPES, Attachment, Comment, CustomField, History, Link, Membership, Space,
+                     Sprint, User, Version, WorkItem)
 from .query import Context
 
 MENTION_RE = re.compile(r"(?<![\w@])@([a-z0-9._-]+)", re.I)
@@ -75,6 +75,7 @@ def item_to_dict(item: WorkItem, cnt: dict | None = None) -> dict:
         "reporter_id": item.reporter_id, "points": item.points, "estimate": item.estimate_hours,
         "logged": round(item.logged_hours or 0, 2), "start": iso(item.start_date), "due": iso(item.due_date),
         "labels": list(item.labels or []), "checklist": list(item.checklist or []),
+        "custom": dict(item.custom or {}),
         "parent_key": item.parent.key if item.parent else None, "sprint_id": item.sprint_id,
         "version_id": item.version_id,
         "status_since": iso(cnt.get("status_since", {}).get(item.id) or item.updated_at),
@@ -129,7 +130,9 @@ def build_context(db: Session, spaces: list[Space], me: User, items: list[dict])
     stale_days = 14
     for sp in spaces:
         stale_days = int((sp.settings or {}).get("stale_days") or stale_days)
-    return Context(users=users, sprints=sprints, versions=versions, categories=cats, stale_days=stale_days,
+    custom = {f.key: f.type for sp in spaces for f in space_fields(db, sp)}
+    return Context(users=users, sprints=sprints, versions=versions, custom=custom,
+                   categories=cats, stale_days=stale_days,
                    parents={i["key"]: i["title"] for i in items},
                    blocked=blocked_keys(db, spaces), me=me.id, today=date.today())
 
@@ -179,6 +182,71 @@ def _number(value, name):
     if n < 0:
         raise HTTPException(422, f"{name} cannot be negative.")
     return n
+
+
+def space_fields(db: Session, space: Space, include_archived: bool = False) -> list[CustomField]:
+    q = select(CustomField).where(CustomField.space_id == space.id)
+    if not include_archived:
+        q = q.where(CustomField.archived.is_(False))
+    return list(db.scalars(q.order_by(CustomField.position, CustomField.id)))
+
+
+def coerce_custom(field: CustomField, value, members: set[int] | None = None):
+    """Validate one custom value against its definition and return what to store.
+
+    Empty always clears, including for a required field: required governs what a form asks for,
+    not what the database will accept, and refusing to let someone empty a box they filled by
+    mistake is worse than an empty box.
+    """
+    if value is None or value == "" or value == []:
+        return None
+    t = field.type
+    try:
+        if t == "number":
+            return float(value)
+        if t == "checkbox":
+            return bool(value) if isinstance(value, bool) else str(value).lower() in ("true", "1", "yes")
+        if t == "date":
+            return date.fromisoformat(str(value)[:10]).isoformat()
+        if t == "user":
+            uid = int(value)
+            if members is not None and uid not in members:
+                raise ValueError("not a member")
+            return uid
+        if t == "select":
+            v = str(value)
+            if v not in field.options:
+                raise ValueError("not an option")
+            return v
+        if t == "multiselect":
+            vals = value if isinstance(value, list) else [value]
+            bad = [str(v) for v in vals if str(v) not in field.options]
+            if bad:
+                raise ValueError("not an option")
+            return [str(v) for v in vals]
+        if t == "url":
+            v = str(value).strip()
+            if not v.startswith(("http://", "https://")):
+                raise ValueError("not a url")
+            return v[:500]
+        return str(value)[:2000]
+    except (TypeError, ValueError) as e:
+        hint = {"number": "a number", "date": "a date like 2026-10-01",
+                "user": "a member of this space", "url": "a URL starting with http:// or https://",
+                "select": f"one of {', '.join(field.options)}",
+                "multiselect": f"any of {', '.join(field.options)}"}.get(t, "a value")
+        raise HTTPException(422, f"{field.name} must be {hint}.") from e
+
+
+def fmt_custom(field: CustomField, value) -> str:
+    """How a value reads in the history trail: by name, never by id."""
+    if value is None:
+        return ""
+    if field.type == "checkbox":
+        return "yes" if value else "no"
+    if field.type == "multiselect":
+        return ", ".join(str(v) for v in value)
+    return str(value)
 
 
 def _fmt_users(users):
@@ -309,6 +377,26 @@ def apply_changes(db: Session, space: Space, item: WorkItem, actor: User, data: 
                 raise HTTPException(422, "That version is archived. Unarchive it before assigning work to it.")
         old = db.get(Version, item.version_id).name if item.version_id and db.get(Version, item.version_id) else ""
         set_field("version", "version_id", version.id if version else None, old, version.name if version else "")
+    if "custom" in data and isinstance(data["custom"], dict):
+        defs = {f.key: f for f in space_fields(db, space)}
+        current = dict(item.custom or {})
+        for key, raw in data["custom"].items():
+            field_def = defs.get(key)
+            if not field_def:
+                raise HTTPException(422, f"{space.key} has no custom field called '{key}'.")
+            names = {u.id for u in db.scalars(select(User).where(User.id.in_(members)))} if members else set()
+            new_value = coerce_custom(field_def, raw, names if field_def.type == "user" else None)
+            old_value = current.get(key)
+            if old_value != new_value:
+                record(db, item, actor, field_def.name,
+                       fmt_custom(field_def, old_value), fmt_custom(field_def, new_value))
+                if new_value is None:
+                    current.pop(key, None)
+                else:
+                    current[key] = new_value
+                changed.append("custom." + key)
+        # Reassign rather than mutate: SQLAlchemy does not see in-place changes to a JSON column.
+        item.custom = current
     if "rank" in data and data["rank"] is not None:
         item.rank = float(data["rank"])
 

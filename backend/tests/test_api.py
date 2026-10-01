@@ -546,6 +546,98 @@ def test_catch_up(client, world):
     assert client.get("/api/catch-up", params={"days": 90}, headers=A).json()["days"] == 90
 
 
+def test_custom_fields(client, world):
+    A, B = world["A"], world["B"]
+    client.post("/api/spaces", json={"key": "CF", "name": "Custom fields"}, headers=A)
+    client.post("/api/spaces/CF/members", json={"email": "bob@example.com", "role": "member"}, headers=A)
+
+    # A key may not shadow a built-in, or `status = Done` would change meaning.
+    r = client.post("/api/spaces/CF/fields", json={"name": "Status", "type": "text"}, headers=A)
+    assert r.status_code == 422 and "built-in" in r.json()["detail"]
+    # Only admins define fields.
+    assert client.post("/api/spaces/CF/fields", json={"name": "Severity"}, headers=B).status_code == 403
+    # A select needs options.
+    assert client.post("/api/spaces/CF/fields",
+                       json={"name": "Severity", "type": "select"}, headers=A).status_code == 422
+
+    sev = client.post("/api/spaces/CF/fields",
+                      json={"name": "Severity", "type": "select", "options": ["Low", "High"]}, headers=A).json()
+    assert sev["key"] == "severity"
+    cost = client.post("/api/spaces/CF/fields", json={"name": "Cost", "type": "number"}, headers=A).json()
+    when = client.post("/api/spaces/CF/fields", json={"name": "Target date", "type": "date"}, headers=A).json()
+    assert when["key"] == "target_date"
+    teams = client.post("/api/spaces/CF/fields",
+                        json={"name": "Teams", "type": "multiselect", "options": ["web", "api"]}, headers=A).json()
+    flag = client.post("/api/spaces/CF/fields", json={"name": "Regression", "type": "checkbox"}, headers=A).json()
+    link = client.post("/api/spaces/CF/fields", json={"name": "Spec", "type": "url"}, headers=A).json()
+    owner = client.post("/api/spaces/CF/fields", json={"name": "Owner", "type": "user"}, headers=A).json()
+    # Keys are unique per space.
+    assert client.post("/api/spaces/CF/fields", json={"name": "Severity", "type": "text"},
+                       headers=A).status_code == 409
+
+    item = client.post("/api/spaces/CF/items", json={"title": "Has custom values"}, headers=A).json()
+    K = item["key"]
+
+    # Every type validates, and the message says what it wanted.
+    for payload, word in (({"severity": "Critical"}, "one of"), ({"cost": "lots"}, "number"),
+                          ({"target_date": "soon"}, "date"), ({"teams": ["web", "nope"]}, "any of"),
+                          ({"spec": "not-a-url"}, "URL"), ({"owner": 99999}, "member"),
+                          ({"nonexistent": 1}, "no custom field")):
+        r = client.patch(f"/api/items/{K}", json={"custom": payload}, headers=A)
+        assert r.status_code == 422, (payload, r.text)
+        assert word in r.json()["detail"], (payload, r.json()["detail"])
+
+    good = {"severity": "High", "cost": "1200.50", "target_date": "2026-12-01",
+            "teams": ["web", "api"], "regression": True, "spec": "https://example.com/spec",
+            "owner": world["bob"]["id"]}
+    got = client.patch(f"/api/items/{K}", json={"custom": good}, headers=A).json()["custom"]
+    assert got["cost"] == 1200.5 and got["severity"] == "High"
+    assert got["target_date"] == "2026-12-01" and got["regression"] is True
+    assert got["teams"] == ["web", "api"] and got["owner"] == world["bob"]["id"]
+
+    # History records the field's name and readable values, never its key or an id.
+    hist = client.get(f"/api/items/{K}", headers=A).json()["history"]
+    assert any(h["field"] == "Severity" and h["new"] == "High" for h in hist)
+    assert any(h["field"] == "Regression" and h["new"] == "yes" for h in hist)
+
+    # Updates merge, so setting one field does not wipe the others.
+    merged = client.patch(f"/api/items/{K}", json={"custom": {"severity": "Low"}}, headers=A).json()["custom"]
+    assert merged["severity"] == "Low" and merged["cost"] == 1200.5
+
+    def keys(q):
+        r = client.get("/api/search", params={"q": q, "space": "CF"}, headers=A)
+        assert r.status_code == 200, r.text
+        return {i["key"] for i in r.json()["items"]}
+
+    other = client.post("/api/spaces/CF/items", json={"title": "No custom values"}, headers=A).json()
+    assert keys("severity = Low") == {K}
+    assert keys("cost > 1000") == {K}
+    assert keys("target_date < 2027-01-01") == {K}
+    assert keys("teams = web") == {K}
+    assert keys("regression = true") == {K}
+    assert keys("owner = bob") == {K}, "a user field should match by name or handle"
+    assert keys("severity is empty") == {other["key"]}
+    assert keys("severity != Low") == {other["key"]}
+
+    # Clearing works, including on a required field: required governs forms, not the database.
+    client.patch(f"/api/fields/{sev['id']}", json={"required": True}, headers=A)
+    cleared = client.patch(f"/api/items/{K}", json={"custom": {"severity": None}}, headers=A).json()
+    assert "severity" not in cleared["custom"]
+
+    # The type cannot change under existing values.
+    r = client.patch(f"/api/fields/{cost['id']}", json={"type": "text"}, headers=A)
+    assert r.status_code == 422 and "cannot be changed" in r.json()["detail"]
+
+    # Archiving hides a field from the bundle but keeps its values intact.
+    client.patch(f"/api/fields/{flag['id']}", json={"archived": True}, headers=A)
+    bundle = client.get("/api/spaces/CF", headers=A).json()
+    assert "regression" not in [f["key"] for f in bundle["fields"]]
+    assert client.get(f"/api/items/{K}", headers=A).json()["item"]["custom"]["regression"] is True
+
+    # Definitions ride along with the bundle so the browser can render them.
+    assert {"severity", "cost", "target_date", "teams", "spec", "owner"} <= {f["key"] for f in bundle["fields"]}
+
+
 def test_profile_admin_and_delete(client, world):
     A, B = world["A"], world["B"]
     assert client.patch("/api/me", json={"current_password": "wrong", "new_password": "newpassword"}, headers=B).status_code == 403

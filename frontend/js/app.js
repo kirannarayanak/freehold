@@ -17,7 +17,7 @@
     ["updated", "Other edits on work you are involved in"]];
 
   const S = {
-    me: null, users: [], userById: {}, spaces: [], space: null, role: null, members: [], sprints: [], versions: [], items: [],
+    me: null, users: [], userById: {}, spaces: [], space: null, role: null, members: [], sprints: [], versions: [], fields: [], items: [],
     links: [], filters: [], byKey: {}, serverTime: null, view: "board", lanes: "none", query: "", selected: new Set(),
     sortK: "key", sortDir: 1, calMonth: null, notes: { unread: 0, items: [] }, openKey: null, detail: null,
     descEdit: false, descPreview: false, editComment: null, dtab: "comments", reportSprint: null, dragging: null,
@@ -101,7 +101,9 @@
     S.users.forEach(u => (users[u.id] = { name: u.name, handle: u.handle, email: u.email }));
     const parents = {};
     S.items.forEach(i => (parents[i.key] = i.title));
-    return { users, sprints, versions, categories: cats, parents, blocked: blockedSet(), me: S.me.id,
+    const custom = {};
+    (S.fields || []).forEach(f => (custom[f.key] = f.type));
+    return { users, sprints, versions, custom, categories: cats, parents, blocked: blockedSet(), me: S.me.id,
       staleDays: (S.space && S.space.settings && S.space.settings.stale_days) || 14, today: new Date() };
   }
   /* Apply the filter bar. Returns {items, ordered}; shows errors under the input without blocking the view. */
@@ -202,7 +204,7 @@
   async function loadSpace(key) {
     const b = await API.get("/api/spaces/" + encodeURIComponent(key));
     S.space = b.space; S.role = b.space.role; S.members = b.members; S.sprints = b.sprints; S.items = b.items;
-    S.versions = b.versions || [];
+    S.versions = b.versions || []; S.fields = b.fields || [];
     S.links = b.links; S.filters = b.filters; S.serverTime = b.server_time; S.selected.clear(); S.wf = null;
     S.importResult = "";
     b.members.forEach(m => { if (!S.userById[m.id]) { S.userById[m.id] = m; S.users.push(m); } });
@@ -750,6 +752,7 @@
       field("Estimate (hours)", '<input type="number" min="0" step="0.5" data-change="field" data-field="estimate" value="' + (it.estimate != null ? it.estimate : "") + '" aria-label="Estimate in hours"' + dis + ">") +
       field("Start date", '<input type="date" data-change="field" data-field="start" value="' + (it.start || "") + '" aria-label="Start date"' + dis + ">") +
       field("Due date", '<input type="date" data-change="field" data-field="due" value="' + (it.due || "") + '" aria-label="Due date"' + dis + ">") +
+      (S.fields || []).map(f => field(esc(f.name), customInput(f, (it.custom || {})[f.key], dis))).join("") +
       '<div class="stamps muted small">Created ' + ago(it.created_at) + "<br>Updated " + ago(it.updated_at) + (it.resolved_at ? "<br>Resolved " + ago(it.resolved_at) : "") +
       "<br>Watchers: " + (it.watcher_ids.map(uname).map(esc).join(", ") || "none") + "</div>" +
       "</aside></div>";
@@ -895,6 +898,23 @@
   }
 
   /* ---------- settings ---------- */
+  async function loadFields() {
+    const box = document.getElementById("cfs");
+    if (!box) return;
+    try {
+      const d = await API.get("/api/spaces/" + S.space.key + "/fields");
+      box.classList.remove("muted");
+      box.innerHTML = d.fields.length ? d.fields.map(f =>
+        '<div class="mini"><span class="grow">' + esc(f.name) + ' <code>' + esc(f.key) + "</code></span>" +
+        '<span class="muted small">' + esc(f.type) + (f.options.length ? ": " + esc(f.options.join(", ")) : "") + "</span>" +
+        (f.archived ? '<span class="chip">archived</span>' : "") +
+        '<button class="btn ghost sm" data-act="archiveField" data-id="' + f.id + '" data-on="' + (f.archived ? "0" : "1") + '">' +
+        (f.archived ? "Restore" : "Archive") + "</button>" +
+        '<button class="x danger" data-act="deleteField" data-id="' + f.id + '" data-name="' + esc(f.name) + '" aria-label="Delete ' + esc(f.name) + '">x</button></div>').join("")
+        : '<p class="muted small">None yet.</p>';
+    } catch (e) { box.textContent = e.message; }
+  }
+
   async function loadHooks() {
     const box = document.getElementById("hooks");
     if (!box) return;
@@ -945,12 +965,18 @@
       '<section class="card-sec"><h3>Export</h3><p class="muted small">Your data is yours. Exports include every work item with comments, time logs and links.</p>' +
       '<a class="btn ghost sm" href="' + API.fileUrl("/api/spaces/" + sp.key + "/export") + '" download>Download JSON</a> <a class="btn ghost sm" href="' + API.fileUrl("/api/spaces/" + sp.key + "/export.csv") + '" download>Download CSV</a></section>' +
 
+      (admin ? '<section class="card-sec"><h3>Custom fields</h3><p class="muted small">Extra fields on every work item in this space. Each one is filterable by its key, so a field called Severity is <code>severity = High</code> in the filter box. A type cannot change once values exist, so archive instead.</p>' +
+        '<div id="cfs" class="muted small">Loading…</div>' +
+        '<form class="inline-form" data-form="addField"><input name="name" required placeholder="Field name, e.g. Severity" aria-label="Field name">' +
+        '<select name="type" aria-label="Type">' + ["text", "number", "date", "select", "multiselect", "checkbox", "url", "user"].map(t => opt(t, t)).join("") + "</select>" +
+        '<input name="options" placeholder="Options, comma separated (select only)" aria-label="Options">' +
+        '<button class="btn sm" type="submit">Add field</button></form></section>' : "") +
       (admin ? '<section class="card-sec"><h3>Webhooks</h3><p class="muted small">Freehold POSTs to these when things happen here. Each is signed with its own secret, which is shown once when you create it. A receiver that is down never blocks anyone\'s work.</p>' +
         '<div id="hooks" class="muted small">Loading…</div>' +
         '<form class="inline-form" data-form="addWebhook"><input name="url" type="url" required placeholder="https://example.com/freehold-hook" aria-label="Webhook URL"><button class="btn sm" type="submit">Add webhook</button></form></section>' : "") +
       (admin ? '<section class="card-sec danger-zone"><h3>Delete space</h3><p class="muted small">This removes every work item, comment and attachment in ' + esc(sp.key) + '. Export first if you might need it.</p><button class="btn danger sm" data-act="deleteSpace">Delete ' + esc(sp.key) + "</button></section>" : "") +
       "</div>";
-    if (admin) loadHooks();
+    if (admin) { loadHooks(); loadFields(); }
   }
 
   async function loadTokens() {
@@ -966,6 +992,29 @@
         '<button class="x danger" data-act="revokeToken" data-id="' + t.id + '" aria-label="Revoke ' + esc(t.name) + '">x</button></div>').join("")
         : '<p class="muted small">None. Create one to use the API from a script.</p>';
     } catch (e) { box.textContent = e.message; }
+  }
+
+  /* ---------- custom fields ---------- */
+  function customInput(f, value, dis) {
+    const at = ' data-change="custom" data-key="' + esc(f.key) + '" aria-label="' + esc(f.name) + '"' + dis;
+    const v = value == null ? "" : value;
+    if (f.type === "checkbox")
+      return '<label class="inline"><input type="checkbox"' + at + (v ? " checked" : "") + "> " + esc(f.description || "Yes") + "</label>";
+    if (f.type === "select")
+      return "<select" + at + ">" + opt("", "None", v === "") +
+        f.options.map(o => opt(o, o, String(v) === o)).join("") + "</select>";
+    if (f.type === "multiselect") {
+      const chosen = Array.isArray(v) ? v.map(String) : [];
+      return '<div class="chips">' + f.options.map(o =>
+        '<label class="inline"><input type="checkbox" data-change="customMulti" data-key="' + esc(f.key) +
+        '" data-opt="' + esc(o) + '"' + (chosen.includes(o) ? " checked" : "") + dis + "> " + esc(o) + "</label>").join("") + "</div>";
+    }
+    if (f.type === "user")
+      return "<select" + at + ">" + opt("", "Nobody", v === "") +
+        S.members.map(m => opt(m.id, m.name, String(v) === String(m.id))).join("") + "</select>";
+    const type = f.type === "number" ? "number" : f.type === "date" ? "date" : f.type === "url" ? "url" : "text";
+    return '<input type="' + type + '" value="' + esc(String(v)) + '"' + at +
+      (f.description ? ' placeholder="' + esc(f.description) + '"' : "") + ">";
   }
 
   /* ---------- catch up ---------- */
@@ -1320,6 +1369,18 @@
       try { await API.del("/api/me/tokens/" + el.dataset.id); await loadTokens(); toast("Token revoked"); }
       catch (e) { fail(e); }
     },
+    archiveField: async el => {
+      try {
+        await API.patch("/api/fields/" + el.dataset.id, { archived: el.dataset.on === "1" });
+        await loadFields(); await loadSpace(S.space.key); renderView();
+      } catch (e) { fail(e); }
+    },
+    deleteField: el => confirmModal("Delete " + el.dataset.name + "?",
+      "Values already saved under this field stay in the database but stop being readable. Archiving keeps them visible.",
+      "Delete field", async () => {
+        try { await API.del("/api/fields/" + el.dataset.id); await loadFields(); await loadSpace(S.space.key); renderView(); toast("Field deleted"); }
+        catch (e) { fail(e); }
+      }),
     testWebhook: async el => {
       try { await API.post("/api/webhooks/" + el.dataset.id + "/test"); toast("Ping queued"); setTimeout(loadHooks, 1200); }
       catch (e) { fail(e); }
@@ -1343,6 +1404,18 @@
 
   /* ---------- change handlers ---------- */
   const CHG = {
+    custom: async el => {
+      const f = (S.fields || []).find(x => x.key === el.dataset.key);
+      let value = el.type === "checkbox" ? el.checked : el.value;
+      if (value === "") value = null;
+      await saveItem(S.detail.item.key, { custom: { [el.dataset.key]: value } });
+    },
+    customMulti: async el => {
+      const key = el.dataset.key;
+      const picked = $$('input[data-change="customMulti"][data-key="' + key + '"]')
+        .filter(b => b.checked).map(b => b.dataset.opt);
+      await saveItem(S.detail.item.key, { custom: { [key]: picked.length ? picked : null } });
+    },
     catchDays: el => { S.catchDays = +el.value; loadCatchUp(); },
     switchSpace: el => { if (el.value === "__new") go("#/new-space"); else go("#/s/" + el.value + "/" + (VIEWS.some(v => v[0] === S.view) ? S.view : "board")); },
     lanes: el => { S.lanes = el.value; renderView(); },
@@ -1447,6 +1520,18 @@
         form.reset();
         await loadTokens();
         confirmModal("Token created", "Copy it now, it cannot be shown again:\n\n" + t.token, "Done", () => {});
+      } catch (e) { fail(e); }
+    },
+    addField: async form => {
+      const f = Object.fromEntries(new FormData(form).entries());
+      const body = { name: f.name, type: f.type,
+        options: (f.options || "").split(",").map(o => o.trim()).filter(Boolean) };
+      try {
+        await API.post("/api/spaces/" + S.space.key + "/fields", body);
+        form.reset();
+        await loadFields();
+        await loadSpace(S.space.key);
+        toast("Added " + f.name);
       } catch (e) { fail(e); }
     },
     addWebhook: async form => {

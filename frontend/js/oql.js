@@ -163,6 +163,17 @@
       case "version": { const v = (ctx.versions || {})[it.version_id];
         return v ? [v.name, v.released ? "released" : "unreleased"] : ["none"]; }
       case "space": return [it.key.split("-")[0]];
+      default: break;
+    }
+    if (ctx.custom && f in ctx.custom) {
+      const raw = (it.custom || {})[f];
+      if (raw == null) return [];
+      if (Array.isArray(raw)) return raw.map(String);
+      if (ctx.custom[f] === "user") {
+        const who = ctx.users[raw];
+        return who ? [who.name, who.handle] : [String(raw)];
+      }
+      return [String(raw)];
     }
     return null;
   }
@@ -185,7 +196,11 @@
     if (!(v in checks)) throw new QueryError("is:" + value + " is not supported. Try is:open, is:done, is:blocked, is:overdue or is:mine.");
     return checks[v];
   }
-  function empty(f, it) {
+  function empty(f, it, ctx) {
+    if (ctx && ctx.custom && f in ctx.custom) {
+      const v = (it.custom || {})[f];
+      return v == null || v === "" || (Array.isArray(v) && !v.length);
+    }
     if (f === "assignee") return !it.assignee_ids.length;
     if (f === "reporter") return !it.reporter_id;
     if (f === "version") return it.version_id == null;
@@ -200,11 +215,24 @@
   function clause(name, op, values, it, ctx) {
     const f = ALIASES[name] || name;
     if (f === "is") return isCheck(values[0], it, ctx);
-    if (op === "is" || op === "is not") return empty(f, it) === (op === "is");
+    if (op === "is" || op === "is not") return empty(f, it, ctx) === (op === "is");
     if (op === "in" || op === "not in") { const hit = values.some(v => clause(name, "=", [v], it, ctx)); return op === "in" ? hit : !hit; }
     if (op === "!=") return !clause(name, "=", values, it, ctx);
     const value = values[0];
-    if (["empty", "null"].includes(value.toLowerCase()) && (op === "=" || op === ":")) return empty(f, it);
+    if (["empty", "null"].includes(value.toLowerCase()) && (op === "=" || op === ":")) return empty(f, it, ctx);
+    const kind = ctx.custom ? ctx.custom[f] : undefined;
+    if (kind) {
+      const raw = (it.custom || {})[f];
+      if (raw == null) return false;
+      if (kind === "user") return userHit(raw, value, ctx, false);
+      if (kind === "number") {
+        const target = Number(value);
+        if (isNaN(target)) throw new QueryError("'" + value + "' is not a number, and " + f + " holds numbers.");
+        return cmp(Number(raw), op, target);
+      }
+      if (kind === "date") return cmp(String(raw).slice(0, 10), op, parseDate(value, ctx.today));
+      if (kind === "checkbox") return !!raw === ["true", "yes", "1"].includes(value.toLowerCase());
+    }
     if (f in DATE_FIELDS) { const raw = it[DATE_FIELDS[f]]; return !!raw && cmp(raw.slice(0, 10), op, parseDate(value, ctx.today)); }
     if (f in NUM_FIELDS) {
       const target = Number(value);

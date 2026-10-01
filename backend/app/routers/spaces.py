@@ -10,11 +10,12 @@ from sqlalchemy.orm import Session
 
 from .. import config, webhooks
 from ..db import get_db, utcnow
-from ..models import (DEFAULT_STATUSES, ROLES, Attachment, History, Membership, SavedFilter, Space, Sprint, User,
-                      Version, Webhook, WorkItem)
+from ..models import (CUSTOM_FIELD_TYPES, DEFAULT_STATUSES, RESERVED_FIELD_KEYS, ROLES, Attachment,
+                      CustomField, History, Membership, SavedFilter, Space, Sprint, User, Version,
+                      Webhook, WorkItem)
 from ..security import current_user, get_space, space_role
-from ..services import (category, counts, iso, item_to_dict, record, space_links, space_to_dict,
-                        sprint_to_dict, user_to_dict, version_to_dict)
+from ..services import (category, counts, iso, item_to_dict, record, space_fields, space_links,
+                        space_to_dict, sprint_to_dict, user_to_dict, version_to_dict)
 
 router = APIRouter(prefix="/api", tags=["spaces"])
 KEY_RE = re.compile(r"^[A-Z][A-Z0-9]{1,9}$")
@@ -136,6 +137,7 @@ def space_bundle(key: str, user: User = Depends(current_user), db: Session = Dep
         "space": space_to_dict(space, role), "members": _members(db, space),
         "sprints": [sprint_to_dict(s) for s in sprints], "items": [item_to_dict(i, cnt) for i in items],
         "versions": _versions(db, space), "links": space_links(db, space),
+        "fields": [_field_to_dict(f) for f in space_fields(db, space)],
         "filters": _filters(db, space, user), "server_time": utcnow().isoformat(),
     }
 
@@ -446,6 +448,119 @@ def _hook(db: Session, hook_id: int, user: User) -> tuple[Webhook, Space]:
     space = db.get(Space, hook.space_id)
     get_space(db, space.key, user, need="admin")
     return hook, space
+
+
+class FieldIn(BaseModel):
+    name: str
+    key: str | None = None
+    type: str = "text"
+    options: list[str] = []
+    description: str = ""
+    required: bool = False
+
+
+class FieldPatch(BaseModel):
+    name: str | None = None
+    type: str | None = None
+    options: list[str] | None = None
+    description: str | None = None
+    required: bool | None = None
+    archived: bool | None = None
+    position: int | None = None
+
+
+def _field_to_dict(f: CustomField) -> dict:
+    return {"id": f.id, "key": f.key, "name": f.name, "type": f.type, "options": f.options,
+            "description": f.description, "required": f.required, "archived": f.archived,
+            "position": f.position}
+
+
+def _slug(name: str) -> str:
+    out = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+    return (out or "field")[:40]
+
+
+def _check_key(db: Session, space: Space, key: str, exclude: int | None = None) -> str:
+    if key in RESERVED_FIELD_KEYS:
+        raise HTTPException(422, f"'{key}' is the name of a built-in field. "
+                                 "Pick another name, or the filter box could not tell them apart.")
+    q = select(CustomField.id).where(CustomField.space_id == space.id, CustomField.key == key)
+    if exclude:
+        q = q.where(CustomField.id != exclude)
+    if db.scalar(q):
+        raise HTTPException(409, f"This space already has a field with the key '{key}'.")
+    return key
+
+
+@router.get("/spaces/{key}/fields")
+def list_fields(key: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    space, _ = get_space(db, key, user)
+    rows = db.scalars(select(CustomField).where(CustomField.space_id == space.id)
+                      .order_by(CustomField.position, CustomField.id))
+    return {"fields": [_field_to_dict(f) for f in rows], "types": list(CUSTOM_FIELD_TYPES)}
+
+
+@router.post("/spaces/{key}/fields")
+def create_field(key: str, body: FieldIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    space, _ = get_space(db, key, user, need="admin")
+    name = body.name.strip()[:120]
+    if not name:
+        raise HTTPException(422, "A field needs a name.")
+    if body.type not in CUSTOM_FIELD_TYPES:
+        raise HTTPException(422, f"Type must be one of {', '.join(CUSTOM_FIELD_TYPES)}.")
+    if body.type in ("select", "multiselect") and not body.options:
+        raise HTTPException(422, f"A {body.type} field needs at least one option.")
+    slug = _check_key(db, space, _slug(body.key or name))
+    top = db.scalar(select(func.max(CustomField.position)).where(CustomField.space_id == space.id)) or 0
+    field = CustomField(space_id=space.id, key=slug, name=name, type=body.type,
+                        options=[o.strip() for o in body.options if o.strip()],
+                        description=body.description or "", required=body.required, position=top + 1)
+    db.add(field)
+    db.commit()
+    return _field_to_dict(field)
+
+
+@router.patch("/fields/{field_id}")
+def update_field(field_id: int, body: FieldPatch, user: User = Depends(current_user),
+                 db: Session = Depends(get_db)):
+    field = db.get(CustomField, field_id)
+    if not field:
+        raise HTTPException(404, "That field was not found.")
+    space = db.get(Space, field.space_id)
+    get_space(db, space.key, user, need="admin")
+    if body.name is not None:
+        field.name = body.name.strip()[:120] or field.name
+    if body.type is not None and body.type != field.type:
+        # The key is what values are stored under, so changing the type would reinterpret every
+        # value already saved. Archiving and adding a new field keeps the old data readable.
+        raise HTTPException(422, "A field's type cannot be changed once it exists. "
+                                 "Archive it and add a new one, so existing values keep their meaning.")
+    if body.options is not None:
+        field.options = [o.strip() for o in body.options if o.strip()]
+    if body.description is not None:
+        field.description = body.description
+    if body.required is not None:
+        field.required = body.required
+    if body.archived is not None:
+        field.archived = body.archived
+    if body.position is not None:
+        field.position = body.position
+    db.commit()
+    return _field_to_dict(field)
+
+
+@router.delete("/fields/{field_id}")
+def delete_field(field_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Deleting a definition leaves the values in place but unreadable, so archiving is offered
+    first and deletion says how many items would be affected."""
+    field = db.get(CustomField, field_id)
+    if not field:
+        raise HTTPException(404, "That field was not found.")
+    space = db.get(Space, field.space_id)
+    get_space(db, space.key, user, need="admin")
+    db.delete(field)
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/spaces/{key}/webhooks")
