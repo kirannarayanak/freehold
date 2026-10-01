@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import os
 import re
+import secrets
 import time
 from datetime import timedelta
 
@@ -14,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from . import config
 from .db import get_db, utcnow
-from .models import Membership, Space, User
+from .models import ApiToken, Membership, Space, User
 
 ROLE_ORDER = {"viewer": 0, "member": 1, "admin": 2}
 _SCRYPT = dict(n=2**14, r=8, p=1, dklen=32)
@@ -78,12 +79,48 @@ def verify_password(password: str, stored: str) -> bool:
     return hmac.compare_digest(digest, expected)
 
 
+TOKEN_PREFIX = "fh_"
+
+
+def new_api_token() -> tuple[str, str, str]:
+    """Returns (token, prefix, hash). The token is shown once and never stored."""
+    raw = TOKEN_PREFIX + secrets.token_urlsafe(32)
+    return raw, raw[:12], hash_api_token(raw)
+
+
+def hash_api_token(raw: str) -> str:
+    # The token is 256 bits of randomness, so a plain SHA-256 is right here. Password hashing is
+    # slow on purpose to survive low-entropy secrets; doing that per API request would be a cost
+    # with no matching benefit.
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _user_from_api_token(raw: str, db: Session) -> User | None:
+    token = db.scalar(select(ApiToken).where(ApiToken.token_hash == hash_api_token(raw)))
+    if not token:
+        raise HTTPException(401, "That API token is not valid.")
+    if token.expires_at and token.expires_at < utcnow():
+        raise HTTPException(401, "That API token has expired.")
+    user = db.get(User, token.user_id)
+    if not user or not user.is_active:
+        raise HTTPException(401, "This account is not active.")
+    # Written on a best-effort basis: a failure here must not refuse an otherwise valid request.
+    try:
+        token.last_used_at = utcnow()
+        db.commit()
+    except Exception:  # noqa: BLE001
+        db.rollback()
+    return user
+
+
 def create_token(user: User) -> str:
     payload = {"sub": str(user.id), "exp": utcnow() + timedelta(hours=config.TOKEN_HOURS)}
     return jwt.encode(payload, config.SECRET_KEY, algorithm="HS256")
 
 
 def _user_from_token(token: str, db: Session) -> User:
+    if token.startswith(TOKEN_PREFIX):
+        return _user_from_api_token(token, db)
     try:
         payload = jwt.decode(token, config.SECRET_KEY, algorithms=["HS256"])
         user_id = int(payload["sub"])

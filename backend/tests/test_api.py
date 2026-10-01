@@ -422,6 +422,44 @@ def test_webhook_failure_does_not_break_the_write(client, world):
     client.delete(f"/api/webhooks/{hook['id']}", headers=A)
 
 
+def test_api_tokens(client, world):
+    A = world["A"]
+    assert client.post("/api/me/tokens", json={"name": "  "}, headers=A).status_code == 422
+
+    made = client.post("/api/me/tokens", json={"name": "CI pipeline"}, headers=A).json()
+    raw = made["token"]
+    assert raw.startswith("fh_") and made["prefix"] == raw[:12]
+
+    # Shown once: the list never carries the token itself, only enough to recognise it.
+    listed = client.get("/api/me/tokens", headers=A).json()
+    assert listed[0]["name"] == "CI pipeline" and "token" not in listed[0]
+    assert listed[0]["last_used_at"] is None
+
+    # It authenticates like a session token, on the same header.
+    T = {"Authorization": f"Bearer {raw}"}
+    r = client.get("/api/spaces/WEB", headers=T)
+    assert r.status_code == 200 and r.json()["space"]["key"] == "WEB"
+    # and it can write, as the user who owns it
+    item = client.post("/api/spaces/WEB/items", json={"title": "Filed by a script"}, headers=T).json()
+    assert item["reporter_id"] == world["admin"]["id"]
+    # using it is recorded, so an unused or stolen token is visible
+    assert client.get("/api/me/tokens", headers=A).json()[0]["last_used_at"] is not None
+
+    assert client.get("/api/me", headers={"Authorization": "Bearer fh_not_a_real_token"}).status_code == 401
+
+    # Revoking takes effect immediately.
+    assert client.delete(f"/api/me/tokens/{made['id']}", headers=A).status_code == 200
+    assert client.get("/api/spaces/WEB", headers=T).status_code == 401
+
+    # An expired token is refused.
+    expired = client.post("/api/me/tokens", json={"name": "old", "expires_days": -1}, headers=A).json()
+    assert client.get("/api/me", headers={"Authorization": f"Bearer {expired['token']}"}).status_code == 401
+
+    # One person cannot revoke another's token.
+    mine = client.post("/api/me/tokens", json={"name": "mine"}, headers=A).json()
+    assert client.delete(f"/api/me/tokens/{mine['id']}", headers=world["B"]).status_code == 404
+
+
 def test_profile_admin_and_delete(client, world):
     A, B = world["A"], world["B"]
     assert client.patch("/api/me", json={"current_password": "wrong", "new_password": "newpassword"}, headers=B).status_code == 403

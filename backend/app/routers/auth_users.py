@@ -1,5 +1,6 @@
-"""Sign-up, sign-in, profile and site user management."""
+"""Sign-up, sign-in, profile, API tokens and site user management."""
 import re
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -7,9 +8,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .. import config, notify
-from ..db import get_db
-from ..models import User
-from ..security import (check_login_allowed, clear_login_failures, create_token, current_user,
+from ..db import get_db, utcnow
+from ..models import ApiToken, User
+from ..security import (check_login_allowed, clear_login_failures, create_token, current_user, new_api_token,
                         hash_password, make_handle, record_login_failure, require_site_admin,
                         verify_password)
 from ..services import user_to_dict
@@ -97,6 +98,49 @@ def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
 @router.get("/me")
 def me(user: User = Depends(current_user)):
     return user_to_dict(user, private=True)
+
+
+class TokenIn(BaseModel):
+    name: str
+    expires_days: int | None = None
+
+
+def _token_to_dict(t: ApiToken) -> dict:
+    return {"id": t.id, "name": t.name, "prefix": t.prefix,
+            "last_used_at": t.last_used_at.isoformat() if t.last_used_at else None,
+            "expires_at": t.expires_at.isoformat() if t.expires_at else None,
+            "created_at": t.created_at.isoformat()}
+
+
+@router.get("/me/tokens")
+def list_tokens(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    rows = db.scalars(select(ApiToken).where(ApiToken.user_id == user.id).order_by(ApiToken.id))
+    return [_token_to_dict(t) for t in rows]
+
+
+@router.post("/me/tokens")
+def create_api_token(body: TokenIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Creates a token and returns it once. It cannot be read again, only replaced."""
+    name = body.name.strip()[:120]
+    if not name:
+        raise HTTPException(422, "Give the token a name so you know what to revoke later.")
+    raw, prefix, digest = new_api_token()
+    expires = utcnow() + timedelta(days=body.expires_days) if body.expires_days else None
+    token = ApiToken(user_id=user.id, name=name, prefix=prefix, token_hash=digest, expires_at=expires)
+    db.add(token)
+    db.commit()
+    return {**_token_to_dict(token), "token": raw,
+            "note": "Copy this now. It is not stored and cannot be shown again."}
+
+
+@router.delete("/me/tokens/{token_id}")
+def revoke_api_token(token_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    token = db.get(ApiToken, token_id)
+    if not token or token.user_id != user.id:
+        raise HTTPException(404, "That token was not found.")
+    db.delete(token)
+    db.commit()
+    return {"ok": True}
 
 
 @router.patch("/me")

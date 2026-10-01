@@ -93,6 +93,20 @@ class Version(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class ApiToken(Base):
+    """A long-lived token for scripts. Only the hash is stored, so a leaked database does not
+    hand over working credentials and nobody, including an admin, can read the token back."""
+    __tablename__ = "api_tokens"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    prefix: Mapped[str] = mapped_column(String(16), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class Webhook(Base):
     """An outgoing HTTP hook. The secret signs the body so the receiver can trust it."""
     __tablename__ = "webhooks"

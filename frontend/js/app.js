@@ -939,6 +939,21 @@
     if (admin) loadHooks();
   }
 
+  async function loadTokens() {
+    const box = document.getElementById("tokens");
+    if (!box) return;
+    try {
+      const rows = await API.get("/api/me/tokens");
+      box.classList.remove("muted");
+      box.innerHTML = rows.length ? rows.map(t =>
+        '<div class="mini"><span class="grow">' + esc(t.name) + ' <code>' + esc(t.prefix) + '…</code></span>' +
+        '<span class="muted small">' + (t.last_used_at ? "last used " + ago(t.last_used_at) : "never used") +
+        (t.expires_at ? ", expires " + esc(t.expires_at.slice(0, 10)) : "") + "</span>" +
+        '<button class="x danger" data-act="revokeToken" data-id="' + t.id + '" aria-label="Revoke ' + esc(t.name) + '">x</button></div>').join("")
+        : '<p class="muted small">None. Create one to use the API from a script.</p>';
+    } catch (e) { box.textContent = e.message; }
+  }
+
   /* ---------- profile ---------- */
   function viewProfile(v) {
     const p = S.me.prefs, muted = p.muted || [];
@@ -955,7 +970,12 @@
       '<label>Daily summary time (UTC)<select name="digest_hour">' + Array.from({ length: 24 }, (_, h) => opt(h, String(h).padStart(2, "0") + ":00", +p.digest_hour === h)).join("") + "</select></label></div>" +
       '<button class="btn sm" type="submit">Save notification settings</button></form>' +
       "<h4>Muted work items</h4>" + (muted.length ? muted.map(k => '<span class="chip">' + esc(k) + ' <button class="x" data-act="unmute" data-k="' + esc(k) + '" aria-label="Unmute ' + esc(k) + '">×</button></span>').join(" ") : '<p class="muted small">None. Use Mute on a work item to silence it completely.</p>') +
+      "</section>" +
+      '<section class="card-sec"><h3>API tokens</h3><p class="muted small">For scripts and integrations. A token acts as you, and is shown once when you create it. Send it as <code>Authorization: Bearer fh_…</code>.</p>' +
+      '<div id="tokens" class="muted small">Loading…</div>' +
+      '<form class="inline-form" data-form="addToken"><input name="name" required placeholder="What is it for? e.g. CI pipeline" aria-label="Token name"><button class="btn sm" type="submit">Create token</button></form>' +
       "</section></div>";
+    loadTokens();
   }
 
   /* ---------- site admin: people ---------- */
@@ -1247,6 +1267,10 @@
     deleteSpace: () => confirmModal("Delete " + S.space.key + "?", "Everything in this space is deleted for everyone.", "Delete space", async () => {
       try { const key = S.space.key; await API.del("/api/spaces/" + key); S.space = null; await loadSpaces(); toast("Deleted " + key); go("#/"); } catch (e) { fail(e); }
     }, S.space.key),
+    revokeToken: async el => {
+      try { await API.del("/api/me/tokens/" + el.dataset.id); await loadTokens(); toast("Token revoked"); }
+      catch (e) { fail(e); }
+    },
     testWebhook: async el => {
       try { await API.post("/api/webhooks/" + el.dataset.id + "/test"); toast("Ping queued"); setTimeout(loadHooks, 1200); }
       catch (e) { fail(e); }
@@ -1366,6 +1390,14 @@
     spaceDetails: async form => {
       const f = Object.fromEntries(new FormData(form).entries());
       try { S.space = await API.patch("/api/spaces/" + S.space.key, f); await loadSpaces(); render(); toast("Saved"); } catch (e) { fail(e); }
+    },
+    addToken: async form => {
+      try {
+        const t = await API.post("/api/me/tokens", { name: fld(form, "name").value });
+        form.reset();
+        await loadTokens();
+        confirmModal("Token created", "Copy it now, it cannot be shown again:\n\n" + t.token, "Done", () => {});
+      } catch (e) { fail(e); }
     },
     addWebhook: async form => {
       try {
