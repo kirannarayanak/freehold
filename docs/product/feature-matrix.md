@@ -11,6 +11,22 @@ Status is honest and checked against the code, not aspirational:
 | **Planned** | Agreed, not written |
 | **Deliberate no** | We are choosing not to build this, with a reason |
 
+## Where this stands
+
+| Area | State |
+|---|---|
+| Work items, boards, backlog, sprints, search, reports, notifications | Broadly at parity |
+| Permissions | Deliberately simpler than Jira, and sufficient |
+| Migration | Imports Jira CSV, with named gaps (attachments, links, custom fields) |
+| **Custom fields** | **Not built. The most-cited parity gap** |
+| **Versions and releases** | **Not built. Blocks versioned software** |
+| **Automation** | **Not built. The largest single functional block Jira has and we do not** |
+| **Development tooling** (branches, PRs, builds) | **Not built. Why engineers tolerate Jira** |
+| **Dashboards** | **Not built** |
+| **SSO, rate limiting, password reset** | **Not built. Blocks company adoption** |
+| **Schema migrations** | **Not built. Blocks safe upgrades, so it blocks everything** |
+| Service management (portal, SLAs) | Out of scope. Freehold is a tracker, not a service desk |
+
 ---
 
 ## Part 1: Jira parity
@@ -87,20 +103,6 @@ Status is honest and checked against the code, not aspirational:
 | Regex / subqueries | No | **Planned** | A named JQL limitation we can beat |
 | Search across all spaces | Yes | **Partial** | Command palette searches; no cross-space result page |
 
-### Reports
-
-| Capability | Jira | Freehold | Notes |
-|---|---|---|---|
-| Burndown | Yes | **Built** | |
-| Velocity | Yes | **Built** | |
-| Cumulative flow | Yes | **Built** | |
-| Created vs resolved | Yes | **Built** | |
-| Cycle time / control chart | Yes | **Built** | |
-| Open points by assignee | Yes | **Built** | |
-| Rebuilt from audit history | No | **Built** | Jira reports read current state; ours replay History, so they stay honest after edits |
-| Dashboards and gadgets | Yes | **Planned** | |
-| Cross-project reporting | Premium | **Planned** | |
-
 ### Users, permissions, security
 
 | Capability | Jira | Freehold | Notes |
@@ -160,6 +162,147 @@ Status is honest and checked against the code, not aspirational:
 
 ---
 
+### Reports
+
+Jira ships a long report catalogue. Most teams use four of them, but the rest is what people hunt for
+after a migration.
+
+| Report | Jira | Freehold | Notes |
+|---|---|---|---|
+| **Rebuilt from audit history** | No | **Built** | Jira reports read current state, so historical charts shift after an edit. Ours replay History and stay honest |
+| Sprint burndown | Yes | **Built** | |
+| Velocity | Yes | **Built** | |
+| Cumulative flow | Yes | **Built** | |
+| Created vs resolved | Yes | **Built** | |
+| Cycle time / control chart | Yes | **Built** | |
+| Open points by assignee | Yes | **Built** | |
+| Sprint report (committed vs added mid-sprint) | Yes | **Planned** | Scope-creep visibility; we record the data already |
+| Epic report / epic burndown | Yes | **Planned** | |
+| Release burndown | Yes | **Planned** | Needs versions first |
+| Average age of open items | Yes | **Planned** | |
+| Recently created | Yes | **Planned** | |
+| Resolution time | Yes | **Partial** | Cycle time covers most of it |
+| Time tracking report / timesheets | Yes | **Planned** | Worklogs are captured; there is no report over them |
+| User workload | Yes | **Partial** | Open points by assignee |
+| Pie chart by any field | Yes | **Planned** | |
+| Custom report builder | Add-on (eazyBI) | **Planned** | Jira needs a paid add-on for this, which is a gap worth beating |
+| Cross-space reporting | Premium | **Planned** | |
+
+### Dashboards
+
+| Capability | Jira | Freehold | Notes |
+|---|---|---|---|
+| Personal dashboard | Yes | **Not built** | You land in a space, not on an overview |
+| Shared/team dashboards | Yes | **Not built** | |
+| Gadgets (filter results, charts, counts) | Yes | **Not built** | |
+| Cross-space rollup | Premium | **Not built** | |
+| "What changed since I was away" | No | **Planned** | Nobody does this well; see Part 2 |
+
+### Automation
+
+Jira Automation is a large product in its own right, and one of the most-cited reasons teams stay.
+
+| Capability | Jira | Freehold | Notes |
+|---|---|---|---|
+| Rule triggers (created, transitioned, field changed, commented) | Yes | **Not built** | |
+| Conditions and branching | Yes | **Not built** | |
+| Actions (assign, transition, comment, notify, create linked item) | Yes | **Not built** | |
+| Scheduled rules | Yes | **Not built** | |
+| Cross-project rules | Yes | **Not built** | |
+| Rule audit log | Yes | **Not built** | |
+| Usage limits by plan | Yes | **Deliberate no** | Automation is metered in Jira Cloud. Self-hosted has no reason to meter it |
+
+Nothing here exists today. It is the single largest functional block Jira has and Freehold does not.
+
+### Development tooling
+
+Jira's dev panel is why engineers tolerate Jira. This is a complete gap.
+
+| Capability | Jira | Freehold | Notes |
+|---|---|---|---|
+| Linked branches, commits, PRs on the item | Yes | **Not built** | |
+| Smart commits (`WEB-12 #close #time 2h`) | Yes | **Planned** | Cheap to add, high daily value |
+| Build and deployment status | Yes | **Not built** | |
+| Create a branch from an item | Yes | **Not built** | |
+| Git host integration (GitHub, GitLab, Bitbucket) | Yes | **Planned** | |
+| Webhooks out | Yes | **Planned** | The integration floor; nothing else can be built on top until this exists |
+| Incoming webhooks / REST-driven automation | Yes | **Partial** | The full REST API is there; no event push |
+
+### Releases and versions
+
+| Capability | Jira | Freehold | Notes |
+|---|---|---|---|
+| Versions per project | Yes | **Not built** | |
+| Fix version / affects version | Yes | **Not built** | |
+| Release hub (what is in this release) | Yes | **Not built** | |
+| Generated release notes | Yes | **Not built** | |
+| Archive a version | Yes | **Not built** | |
+
+Blocks anyone shipping versioned software. High priority.
+
+### Planning and roadmaps
+
+| Capability | Jira | Freehold | Notes |
+|---|---|---|---|
+| Timeline / Gantt within a space | Yes | **Built** | Bars by start and due date, grouped by epic |
+| Cross-project roadmap | Advanced Roadmaps (Premium) | **Not built** | |
+| Dependency lines between items | Advanced Roadmaps | **Partial** | Links exist and show on the item; the timeline does not draw them |
+| Capacity planning by team | Advanced Roadmaps | **Not built** | |
+| Scenario planning ("what if we slip this") | Advanced Roadmaps | **Not built** | |
+| Baselines | Advanced Roadmaps | **Not built** | |
+
+Jira gates all of this behind Premium. That makes it a fair target rather than a parity obligation.
+
+### Editor and content
+
+| Capability | Jira | Freehold | Notes |
+|---|---|---|---|
+| Rich text editing | WYSIWYG | **Built** (markdown) | Markdown with live preview. A deliberate difference, not a gap |
+| Tables in descriptions | Yes | **Planned** | Markdown tables are not rendered yet |
+| Inline images | Yes | **Built** | |
+| Mentions | Yes | **Built** | |
+| Item templates | Add-on | **Planned** | |
+| Space documents / wiki | Confluence (separate product) | **Planned** | See Part 2, tool sprawl |
+| Draft recovery | Patchy in Jira | **Planned** | Losing a long comment is a common Jira complaint |
+
+### Service management
+
+Jira Service Management is a separate paid product. Listed so the boundary is explicit rather than an
+accidental gap.
+
+| Capability | Jira | Freehold | Notes |
+|---|---|---|---|
+| Customer portal | JSM | **Not built** | |
+| Request types and forms | JSM | **Not built** | |
+| SLAs and breach reporting | JSM | **Not built** | |
+| Queues | JSM | **Partial** | A saved filter plus the list view does most of it |
+| Knowledge base | JSM + Confluence | **Not built** | |
+| Asset / config management | JSM Premium | **Deliberate no** | A different product |
+| Approvals | JSM | **Planned** | Wanted for change management |
+
+**Freehold is a work tracker, not a service desk.** Teams needing a customer-facing portal should know
+that now rather than discover it mid-migration.
+
+### Platform
+
+The quiet things people only notice when missing.
+
+| Capability | Jira | Freehold | Notes |
+|---|---|---|---|
+| Keyboard shortcuts | Yes | **Built** | |
+| Command palette | Yes | **Built** | `Ctrl`/`Cmd` + `K` |
+| Dark mode | Yes | **Built** | Follows the OS by default |
+| Offline / air-gapped operation | No | **Built** | No CDN, no build step, no outbound calls |
+| Personal access tokens for scripts | Yes | **Planned** | Session tokens only today; a script has to log in as a user |
+| Email-to-item (create and comment by email) | Yes | **Not built** | |
+| Filter subscriptions (emailed on a schedule) | Yes | **Not built** | Digests exist, but not over a saved filter |
+| Bulk change driven by a query | Yes | **Partial** | Bulk edit works from the list selection, not from a query |
+| Archive items and spaces | Yes | **Not built** | |
+| Localisation | ~25 languages | **Not built** | English only. Blocks non-English teams outright |
+| Accessibility | Partial, audited | **Partial** | Keyboard reachable, labelled, focus rings, contrast verified. No screen-reader audit |
+| Anonymous / public read-only spaces | Yes | **Not built** | |
+| Global audit log | Yes | **Partial** | Per-item history exists; no instance-wide view |
+
 ## Part 2: Beyond Jira
 
 Problems Jira users report that Jira has not solved. This is where the product earns a switch rather than merely matching.
@@ -216,6 +359,65 @@ Lock-in is the quiet reason teams stay.
 
 ---
 
+### 9. Sub-tasks cannot have sub-tasks
+
+[JRA-4446](https://jira.atlassian.com/browse/JRA-4446) asks for sub-issues to contain their own
+sub-issues. It has over a thousand votes and has been open for years. Real work nests deeper than three
+levels and teams fake it with links and naming conventions.
+
+**Freehold:** Epic → Story → Subtask today, same as Jira. **Planned:** arbitrary depth, because the
+constraint is a database decision, not a methodology.
+
+### 10. Reporting beyond the basics needs a paid add-on
+
+Jira's built-in reports stop at a fixed list. Anything bespoke means eazyBI or a similar Marketplace
+product, billed per user on top of Jira itself.
+
+**Freehold:** reports are computed server-side from history and exposed on the REST API, so any team that
+can write a query already has its data. **Planned:** a report builder in the product, not sold separately.
+
+### 11. Nobody can answer "what changed while I was away"
+
+Come back from a week off and Jira offers you an inbox of individual notifications and an activity stream.
+Neither answers the actual question: what moved, what is now blocked, what needs me.
+
+**Planned:** a catch-up view scoped to a date range and to work you are involved in: status changes,
+new blockers, items that became overdue, and comments that mention you, collapsed into one screen.
+Nothing in Jira does this, and it is the first thing anyone does on a Monday.
+
+### 12. Long comments get lost
+
+Losing a half-written comment or description to a navigation, a session timeout or a failed save is a
+recurring complaint.
+
+**Planned:** local draft capture on every editor, restored on return. Cheap to build, disproportionately
+appreciated, and the self-hosted case makes it safe because the draft never leaves the browser.
+
+### 13. Nothing notices stale work
+
+Items rot. A ticket sitting in "In progress" for six weeks looks identical to one opened yesterday, and
+Jira will not tell you unless somebody builds a filter and remembers to look at it.
+
+**Planned:** stale detection surfaced on the board and in reports, driven by time in status rather than
+by age, which is the number that actually matters.
+
+### 14. Duplicates are found by accident
+
+Jira will happily take the same bug five times.
+
+**Freehold:** the create dialog already warns on likely duplicates while you type the summary.
+**Planned:** extend it to description text and to recently closed items, which is where duplicates
+actually hide.
+
+### 15. Per-seat cost decides the tool, not merit
+
+Once past the free tier, Jira's per-user pricing compounds, and teams report it as a direct reason to
+leave. The cost also distorts behaviour: read-only stakeholders get excluded to save money, so the tool
+stops being the single source of truth.
+
+**Freehold:** no per-seat cost at all. Add every stakeholder as a viewer, because viewers cost nothing
+and a tracker that excludes people is not a system of record.
+
 ## Part 3: What we will not build
 
 Scope discipline is a feature. Every item here is a thing Jira has that made Jira worse.
@@ -232,11 +434,20 @@ Scope discipline is a feature. Every item here is a thing Jira has that made Jir
 
 Judged by what blocks adoption, not by what is interesting to build.
 
-1. **Alembic migrations** — nothing else can ship safely until upgrades are safe
-2. **SSO/OIDC + login rate limiting + password reset** — blocks company adoption outright
-3. **Custom fields** — the most-cited parity gap
-4. **Versions and releases** — blocks anyone shipping versioned software
-5. **Importer: attachments, links, custom fields** — every missing piece is a reason not to migrate
-6. **Visual query builder** — turns OQL from a barrier into the reason to stay
-7. **Webhooks and automation** — the integration floor
-8. **Permission preview and notification "why"** — the differentiators, once the table stakes are done
+| # | Item | Why here |
+|---|---|---|
+| 1 | **Alembic migrations** | Nothing else can ship safely until upgrades are safe. Everything below is blocked by this |
+| 2 | **SSO/OIDC, login rate limiting, password reset** | Blocks company adoption outright, and the missing rate limit is a live security gap |
+| 3 | **Custom fields** | The most-cited parity gap. Many teams cannot migrate without it |
+| 4 | **Webhooks** | The integration floor. Automation and dev tooling both sit on top of it |
+| 5 | **Importer: attachments, links, custom fields** | Every missing piece is a reason not to migrate, and migration is the whole acquisition path |
+| 6 | **Versions and releases** | Blocks anyone shipping versioned software |
+| 7 | **Development tooling** (smart commits, branch and PR links) | Why engineers tolerate Jira. Smart commits alone are cheap and earn daily use |
+| 8 | **Automation rules** | The largest functional block we lack. Deliberately smaller than Jira's |
+| 9 | **Visual query builder** | Turns OQL from a barrier into a reason to stay, and reaches the non-engineers Jira loses |
+| 10 | **Dashboards and the catch-up view** | The first screen people want, and nobody does catch-up well |
+| 11 | **Paging the space bundle** | The known ceiling on the thing that makes Freehold feel fast |
+| 12 | **Permission preview, notification "why", stale detection** | The differentiators. Worth nothing until the table stakes above are done |
+
+Items 1 and 2 are not features. They are the difference between a project people try and a project people
+deploy.
