@@ -360,6 +360,46 @@ def update_version(version_id: int, body: VersionPatch, user: User = Depends(cur
     return version_to_dict(version)
 
 
+@router.get("/versions/{version_id}/notes")
+def version_notes(version_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Release notes as markdown, grouped by type and ordered the way people read them.
+
+    Generated rather than written, so they cannot drift from what actually shipped.
+    """
+    version = db.get(Version, version_id)
+    if not version:
+        raise HTTPException(404, "That version was not found.")
+    space = db.get(Space, version.space_id)
+    get_space(db, space.key, user)
+    items = list(db.scalars(select(WorkItem).where(WorkItem.version_id == version.id)
+                            .order_by(WorkItem.number)))
+    done = [i for i in items if category(space, i.status) == "done"]
+    open_items = [i for i in items if category(space, i.status) != "done"]
+
+    lines = [f"# {space.name} {version.name}", ""]
+    if version.release_date:
+        lines += [f"Released {version.release_date.isoformat()}", ""]
+    if version.description:
+        lines += [version.description, ""]
+    if not items:
+        lines += ["_Nothing is assigned to this version yet._"]
+    # Bugs first: the thing people scan release notes for is whether their bug is fixed.
+    for heading, types in (("Fixes", ("Bug",)), ("Features", ("Story", "Epic")), ("Other", ("Task", "Subtask"))):
+        group = [i for i in done if i.type in types]
+        if group:
+            lines += [f"## {heading}", ""]
+            lines += [f"- **{i.key}** {i.title}" for i in group]
+            lines += [""]
+    if open_items:
+        lines += ["## Still open", "",
+                  "_Assigned to this version but not finished._", ""]
+        lines += [f"- **{i.key}** {i.title} ({i.status})" for i in open_items]
+        lines += [""]
+    lines += ["---", f"_{len(done)} of {len(items)} items complete._"]
+    return {"version": version.name, "markdown": "\n".join(lines),
+            "counts": {"total": len(items), "done": len(done), "open": len(open_items)}}
+
+
 @router.delete("/versions/{version_id}")
 def delete_version(version_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
     version, _ = _version(db, version_id, user, need="admin")

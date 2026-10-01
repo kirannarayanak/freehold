@@ -330,6 +330,12 @@ def test_versions_and_releases(client, world):
     r = client.patch(f"/api/items/{item['key']}", json={"version_id": v2["id"]}, headers=A)
     assert r.status_code == 422 and "archived" in r.json()["detail"]
 
+    # Release notes are generated from what is actually in the version, so they cannot drift.
+    notes = client.get(f"/api/versions/{v1['id']}/notes", headers=A).json()
+    assert notes["counts"] == {"total": 1, "done": 1, "open": 0}
+    assert "Ship it" in notes["markdown"] and item["key"] in notes["markdown"]
+    assert notes["markdown"].startswith("# Website relaunch 1.0")
+
     # Only admins delete, and deleting a version never deletes the work in it.
     assert client.delete(f"/api/versions/{v2['id']}", headers=B).status_code == 403
     assert client.delete(f"/api/versions/{v1['id']}", headers=A).status_code == 200
