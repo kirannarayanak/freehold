@@ -25,7 +25,88 @@ small feature that was impossible to ship safely until a piece of invisible plum
 
 ---
 
-## Group A: blocked on something I cannot stand up or verify
+## Everything not built, in one table
+
+Ordered by what blocks adoption. "Later?" is the honest answer, not a wish.
+
+### Blocked on something external
+
+Cannot be built responsibly from here. Not hard, just unverifiable, and unverified auth or import code is how people lose accounts and data.
+
+| Feature | Why not now | What unblocks it | Cost | Later? |
+|---|---|---|---|---|
+| **SSO (SAML / OIDC)** | Only as good as the provider it was tested against. Entra, Okta, Google and Keycloak differ on claims, signatures and logout. Written blind it passes its own tests and locks everyone out of the real instance | A test tenant, or accept Keycloak in Docker as the reference and call the rest unverified | 2–3 days | **Yes — the highest priority of anything here** |
+| **LDAP / Active Directory** | Same, worse. AD differs on schema, group nesting and referrals | A test directory — **or decide to support OIDC only** and let an identity broker handle LDAP | 3 days | Yes, but I would skip it for the broker |
+| **Password reset by email** | Token flow is easy; I cannot verify mail arrives. A reset that silently fails is worse than none, because people lock themselves out waiting | SMTP credentials on a real instance, even a throwaway | Half a day | **Yes, quickly** |
+| **Email-to-item** | Needs an inbound mail path. None exists here | A mailbox to poll over IMAP | 2 days | Yes |
+| **Git integration** (branches, PRs, builds) | Needs OAuth credentials and a publicly reachable callback. localhost cannot receive a webhook from github.com | An OAuth app plus a reachable URL or a tunnel | 3–4 days | Yes |
+| **Smart commits** (`FH-12 #done #time 2h`) | Only needs the webhook receiver, which is unblocked | Build webhooks first | 1 day | **Yes — cheapest high-value win** |
+| **Jira attachment import** | **The genuinely hard one. A Jira CSV does not contain files, only URLs needing authentication.** No importer work fixes this | Jira API credentials while the instance is still alive | 1 day | **Yes, but only before the instance goes read-only. After that the files are gone** |
+
+### Unblocked, just unbuilt
+
+Nothing external needed. Listed in the order I would build them.
+
+| Feature | Why not now | Cost | Later? |
+|---|---|---|---|
+| **Webhooks out** | Time. The integration floor: automation, git and chat all sit on it | 1–2 days | **Yes — first** |
+| **Personal access tokens** | Time. Scripts must currently log in as a human with a password | 1 day | Yes — second |
+| **Custom fields** | Size. Touches the model, API, OQL, both parsers, the UI and the importer | 1–2 weeks | **Yes — the biggest parity gap** |
+| **Stale-work detection** | Time. Time-in-status is already derivable from history | 2 days | Yes, cheap and beyond Jira |
+| **Catch-up view** | Time. The data exists today | 3 days | Yes, beyond Jira |
+| **Draft recovery** | Time. Pure frontend, `localStorage` | 1 day | Yes |
+| **Automation rules** | Needs webhooks first. Largest block Jira has that we do not | 2–3 weeks | Yes, deliberately smaller than Jira's |
+| **Dashboards** | Size. Opening on a board instead is defensible | 1–2 weeks | Yes |
+| **Release notes generation** | Time. All the data landed with versions | 1 day | Yes, easy now |
+| **Release hub view** | Time. The API is complete; no screen yet | 2 days | Yes |
+| **Affects version** | Time | Half a day | Yes |
+| **Components** | Labels cover most of it today | 2 days | Yes, low priority |
+| **Resolution field** | Jira's status/resolution split confuses everyone; needs a better design, not a copy | 3 days | Yes, once designed |
+| **Workflow transition rules** | Size, and restraint. Jira's version is the main admin tax | 1 week | Yes, deliberately small |
+| **Approvals** | Depends on transition rules | 3 days | Yes, after the above |
+| **Visual query builder** | Size. Turns OQL from a barrier into the reason to stay | 1 week | Yes, high value |
+| **Regex and subqueries in OQL** | Time. A named JQL limitation we can beat | 3 days | Yes |
+| **Filter subscriptions** | Time. Digests exist but not over a saved filter | 2 days | Yes |
+| **Bulk change from a query** | Time. Bulk edit works from selection, not from the filter | 1 day | Yes, easy |
+| **Parallel sprints** | Time | 2 days | Yes |
+| **Cross-space reporting** | Size | 1 week | Yes |
+| **Item templates** | Time | 2 days | Yes |
+| **Space documents / wiki** | Size. Answers the tool-sprawl problem | 2 weeks | Yes |
+| **Issue-level security** | Size, and it complicates the permission model we deliberately kept simple | 1 week | Yes, reluctantly |
+| **Two-factor auth** | Time. Needs TOTP plus recovery-code UX | 3 days | Yes |
+| **Archive items and spaces** | Time | 2 days | Yes |
+| **Global audit log view** | Time. Per-item history already exists | 2 days | Yes |
+| **Anonymous / public spaces** | Time, plus a security review of every endpoint | 3 days | Yes, carefully |
+| **Paging the space bundle** | Time. The known ceiling on what makes Freehold fast | 3 days | **Yes — it is a cliff, not a slope** |
+| **Per-user time zones** | Time. Digests are UTC, which affects you directly | 2 days | Yes |
+| **Jira import: links and custom fields** | Links are easy; custom fields need custom fields to exist first | 2 days | Yes, after custom fields |
+| **Localisation** | Code is a week. **Finding translators is the real blocker** | 1 week + people | Yes, if you want non-English teams |
+
+### Needs your decision, not my implementation
+
+| Question | Why it is yours | Blocking? |
+|---|---|---|
+| **A LICENSE** | No licence means **all rights reserved** — nobody can legally use, fork or contribute. AGPL-3.0 stops a competitor running it as closed SaaS; Apache-2.0 maximises adoption. I lean AGPL since the opening is self-hosting | **Yes. "Open source" is untrue until this exists** |
+| **Service desk or not** | A customer portal with SLAs is a different product sharing a database. Roughly doubles the surface and changes who the user is. I would stay a tracker and say so | No, but it shapes the roadmap |
+| **Accessibility audit** | Keyboard, labels, focus and contrast are done. A screen-reader audit needs a specialist or real NVDA/VoiceOver time. Public sector and large enterprise often require it | Only if your buyers require it |
+
+### Deliberately not building
+
+Not gaps. Each is a thing Jira has that made Jira worse.
+
+| Feature | Why not |
+|---|---|
+| **Plugin marketplace** | Third-party code in the request path is why Jira cannot be made fast |
+| **Permission schemes** | Three roles that fit in your head beat a matrix nobody can audit |
+| **Workflow per issue type** | The single largest source of configuration sprawl |
+| **Native mobile app** | The responsive web app already works on a phone |
+| **Voting** | It measures who is loudest |
+
+---
+
+## The detail behind the table
+
+### Group A: blocked on something I cannot stand up or verify
 
 These are not hard. They are untestable from here, and shipping authentication or data-import code that
 has never run against the real thing is how people lose accounts and data.
@@ -100,7 +181,7 @@ afterwards the files are simply gone.
 
 ---
 
-## Group B: unblocked, just not built yet
+### Group B: unblocked, just not built yet
 
 Nothing external is needed. These are a question of time, and they are listed in the order I would do
 them.
@@ -122,7 +203,7 @@ them.
 
 ---
 
-## Group C: needs a decision from you, not from me
+### Group C: needs a decision from you, not from me
 
 I should not pick these unilaterally.
 
@@ -156,7 +237,7 @@ enterprises often say yes)? If so it moves up the list sharply.
 
 ---
 
-## Group D: deliberately not building
+### Group D: deliberately not building
 
 Reasons in the [feature matrix](feature-matrix.md). Briefly: **a plugin marketplace** (third-party code
 in the request path is why Jira cannot be made fast), **permission schemes**, **workflow per issue
