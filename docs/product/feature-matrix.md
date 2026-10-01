@@ -197,7 +197,7 @@ after a migration.
 | Shared/team dashboards | Yes | **Not built** | |
 | Gadgets (filter results, charts, counts) | Yes | **Not built** | |
 | Cross-space rollup | Premium | **Not built** | |
-| "What changed since I was away" | No | **Planned** | Nobody does this well; see Part 2 |
+| "What changed since I was away" | **No** | **Built** | Cross-space, scoped to work you are involved in, excluding your own edits |
 
 ### Automation
 

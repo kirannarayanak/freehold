@@ -511,6 +511,41 @@ def test_stale_detection(client, world):
     assert row["status_since"].startswith(str(long_ago.year))
 
 
+def test_catch_up(client, world):
+    """What moved on my work while I was away, in one request."""
+    A, B = world["A"], world["B"]
+    # Earlier tests may have removed Bob from WEB, so this test states its own preconditions.
+    client.post("/api/spaces/WEB/members", json={"email": "bob@example.com", "role": "member"}, headers=A)
+    bundle = client.get("/api/spaces/WEB", headers=A).json()
+    doing = [st["name"] for st in bundle["space"]["statuses"] if st["category"] == "doing"][0]
+
+    # Something Bob assigns to the admin, moves, and comments on.
+    it = client.post("/api/spaces/WEB/items", json={"title": "Handed over to you"}, headers=B).json()
+    client.patch(f"/api/items/{it['key']}",
+                 json={"assignee_ids": [world["admin"]["id"]]}, headers=B)
+    client.patch(f"/api/items/{it['key']}", json={"status": doing}, headers=B)
+    client.post(f"/api/items/{it['key']}/comments", json={"body": "over to you"}, headers=B)
+
+    r = client.get("/api/catch-up", params={"days": 7}, headers=A)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["nothing"] is False and d["total"] > 0
+    assert it["key"] in [x["key"] for x in d["assigned"]], "a new assignment should show up"
+    assert it["key"] in [x["key"] for x in d["moved"]], "a status change should show up"
+    moved = next(x for x in d["moved"] if x["key"] == it["key"])
+    assert moved["to"] == doing and moved["by"] == "Bob Stone"
+    assert it["key"] in [x["key"] for x in d["commented"]]
+
+    # Your own edits are not news to you.
+    own = client.post("/api/spaces/WEB/items", json={"title": "I did this myself"}, headers=A).json()
+    client.patch(f"/api/items/{own['key']}", json={"status": doing}, headers=A)
+    after = client.get("/api/catch-up", params={"days": 7}, headers=A).json()
+    assert own["key"] not in [x["key"] for x in after["moved"]], "your own changes are not catch-up"
+
+    # Narrow the window and the same change drops out of it.
+    assert client.get("/api/catch-up", params={"days": 90}, headers=A).json()["days"] == 90
+
+
 def test_profile_admin_and_delete(client, world):
     A, B = world["A"], world["B"]
     assert client.patch("/api/me", json={"current_password": "wrong", "new_password": "newpassword"}, headers=B).status_code == 403

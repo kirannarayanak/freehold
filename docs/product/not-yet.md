@@ -21,6 +21,7 @@ For contrast, these were blocked an hour ago and are not any more.
 | **Release notes** | Needed versions to exist | Built, generated from what is in the version |
 | **Stale-work detection** | Nothing | Built. Measured from the last status change, not age |
 | **Bulk change from a query** | Nothing — it already worked | Filter, select all, change. The matrix was wrong, not the code |
+| **Catch-up view** | Nothing | Built. What moved on your work while you were away, across spaces |
 | **Versions and releases** | Needed a new column on an existing table, which `create_all` can never add | Migrations landed first |
 | **Login rate limiting** | Nothing | Built; a live security gap closed |
 | **Markdown tables** | Nothing | Built, escape-first, with alignment |
@@ -56,7 +57,6 @@ Nothing external needed. Listed in the order I would build them.
 | Feature | Why not now | Cost | Later? |
 |---|---|---|---|
 | **Custom fields** | Size. Touches the model, API, OQL, both parsers, the UI and the importer | 1–2 weeks | **Yes — the biggest parity gap** |
-| **Catch-up view** | Time. The data exists today | 3 days | Yes, beyond Jira |
 | **Automation rules** | Needs webhooks first. Largest block Jira has that we do not | 2–3 weeks | Yes, deliberately smaller than Jira's |
 | **Dashboards** | Size. Opening on a board instead is defensible | 1–2 weeks | Yes |
 | **Release hub view** | Time. The API is complete; no screen yet | 2 days | Yes |

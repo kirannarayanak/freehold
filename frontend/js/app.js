@@ -239,7 +239,7 @@
         S.view = VIEWS.some(v => v[0] === parts[2]) ? parts[2] : "board";
         return render();
       }
-      if (parts[0] === "profile" || parts[0] === "admin" || parts[0] === "new-space") { S.view = parts[0]; return render(); }
+      if (["profile", "admin", "new-space", "catch-up"].includes(parts[0])) { S.view = parts[0]; return render(); }
       let last = null;
       try { last = localStorage.getItem("freehold.space"); } catch (e) {}
       const target = S.spaces.find(s => s.key === last) || S.spaces[0];
@@ -277,7 +277,8 @@
     const badge = $("#badge");
     badge.hidden = !S.notes.unread;
     badge.textContent = S.notes.unread > 99 ? "99+" : S.notes.unread;
-    const titles = { profile: "Profile and notifications", admin: "People", "new-space": "New space" };
+    const titles = { profile: "Profile and notifications", admin: "People", "new-space": "New space",
+      "catch-up": "While you were away" };
     $("#title").textContent = titles[S.view] || (S.space ? S.space.name : "Freehold");
     document.title = (titles[S.view] || (S.space ? S.space.name : "")) + " · Freehold";
     const q = $("#q");
@@ -290,8 +291,8 @@
     const v = $("#view");
     const views = { board: viewBoard, backlog: viewBacklog, list: viewList, timeline: viewTimeline, calendar: viewCalendar,
       reports: viewReports, activity: viewActivity, settings: viewSettings, profile: viewProfile, admin: viewAdmin,
-      "new-space": viewNewSpace };
-    if (!S.space && !["profile", "admin", "new-space"].includes(S.view)) { viewNewSpace(v); return; }
+      "new-space": viewNewSpace, "catch-up": viewCatchUp };
+    if (!S.space && !["profile", "admin", "new-space", "catch-up"].includes(S.view)) { viewNewSpace(v); return; }
     (views[S.view] || viewBoard)(v);
   }
 
@@ -967,6 +968,39 @@
     } catch (e) { box.textContent = e.message; }
   }
 
+  /* ---------- catch up ---------- */
+  function viewCatchUp(v) {
+    const days = S.catchDays || 7;
+    v.innerHTML = '<div class="settings"><section class="card-sec"><h3>While you were away</h3>' +
+      '<p class="muted small">Changes other people made to work you are assigned, watching or raised. Your own edits are not news to you.</p>' +
+      '<label class="inline">Last <select data-change="catchDays">' +
+      [1, 3, 7, 14, 30].map(d => opt(d, d + (d === 1 ? " day" : " days"), d === days)).join("") + "</select></label>" +
+      '<div id="catch" class="muted small">Loading…</div></section></div>';
+    loadCatchUp();
+  }
+
+  async function loadCatchUp() {
+    const box = document.getElementById("catch");
+    if (!box) return;
+    try {
+      const d = await API.get("/api/catch-up?days=" + (S.catchDays || 7));
+      box.classList.remove("muted");
+      if (d.nothing) { box.innerHTML = '<p class="muted">Nothing changed on your work. Enjoy it.</p>'; return; }
+      const group = (title, rows, line) => rows.length
+        ? "<h4>" + esc(title) + ' <span class="muted small">' + rows.length + "</span></h4>" +
+          rows.map(r => '<div class="mini"><a href="#/item/' + esc(r.key) + '">' + esc(r.key) + "</a>" +
+            '<span class="grow">' + esc(r.title) + "</span>" +
+            '<span class="muted small">' + line(r) + "</span></div>").join("")
+        : "";
+      box.innerHTML =
+        group("Newly assigned to you", d.assigned, r => "by " + esc(r.by) + " " + ago(r.at)) +
+        group("Blocked right now", d.blocked, () => "waiting on something unfinished") +
+        group("Overdue", d.overdue, r => "due " + esc(r.due)) +
+        group("Moved", d.moved, r => esc(r.from) + " to " + esc(r.to) + ", by " + esc(r.by) + " " + ago(r.at)) +
+        group("New comments", d.commented, r => esc(r.by) + " " + ago(r.at));
+    } catch (e) { box.textContent = e.message; }
+  }
+
   /* ---------- profile ---------- */
   function viewProfile(v) {
     const p = S.me.prefs, muted = p.muted || [];
@@ -1309,6 +1343,7 @@
 
   /* ---------- change handlers ---------- */
   const CHG = {
+    catchDays: el => { S.catchDays = +el.value; loadCatchUp(); },
     switchSpace: el => { if (el.value === "__new") go("#/new-space"); else go("#/s/" + el.value + "/" + (VIEWS.some(v => v[0] === S.view) ? S.view : "board")); },
     lanes: el => { S.lanes = el.value; renderView(); },
     sel: el => {

@@ -2,6 +2,7 @@
 import csv
 import io
 import json
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
@@ -10,12 +11,90 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from .. import importer, reports
-from ..db import get_db
-from ..models import Comment, Link, Membership, Notification, Sprint, User, WorkItem, Worklog
+from ..db import get_db, utcnow
+from ..models import (Comment, History, Link, Membership, Notification, Space, Sprint, User, WorkItem,
+                      Worklog, item_assignees, item_watchers)
 from ..security import current_user, current_user_or_query_token, get_space
-from ..services import item_to_dict, space_to_dict, sprint_to_dict
+from ..services import blocked_keys, category, item_to_dict, space_to_dict, sprint_to_dict
 
 router = APIRouter(prefix="/api", tags=["reports and data"])
+
+
+@router.get("/catch-up")
+def catch_up(days: int = 7, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """What changed, on your work, while you were away.
+
+    Jira can tell you everything that happened and it can tell you one notification at a time.
+    Neither answers the question people actually ask on a Monday, which is what moved on my work,
+    what is newly stuck, and what needs me now. This answers that in one request.
+    """
+    days = max(1, min(days, 90))
+    since = utcnow() - timedelta(days=days)
+
+    space_ids = [m.space_id for m in db.scalars(select(Membership).where(Membership.user_id == user.id))]
+    if user.is_admin:
+        space_ids = list(db.scalars(select(Space.id)))
+    if not space_ids:
+        return {"since": since.isoformat(), "days": days, "nothing": True}
+
+    # Work you are involved in: assigned, watching, or you raised it.
+    involved_ids = set(db.scalars(select(item_assignees.c.item_id)
+                                  .where(item_assignees.c.user_id == user.id)))
+    involved_ids |= set(db.scalars(select(item_watchers.c.item_id)
+                                   .where(item_watchers.c.user_id == user.id)))
+    involved_ids |= set(db.scalars(select(WorkItem.id).where(WorkItem.reporter_id == user.id,
+                                                             WorkItem.space_id.in_(space_ids))))
+    items = {i.id: i for i in db.scalars(select(WorkItem).where(WorkItem.id.in_(involved_ids)))} if involved_ids else {}
+
+    rows = db.scalars(select(History).where(History.item_id.in_(involved_ids or [-1]),
+                                            History.at > since,
+                                            History.actor_id != user.id)
+                      .order_by(History.at.desc())) if involved_ids else []
+
+    def brief(item, extra=None):
+        d = {"key": item.key, "title": item.title, "status": item.status, "type": item.type}
+        if extra:
+            d.update(extra)
+        return d
+
+    moved, assigned, commented, seen = [], [], [], set()
+    for h in rows:
+        item = items.get(h.item_id)
+        if not item:
+            continue
+        actor = db.get(User, h.actor_id).name if h.actor_id else "Someone"
+        if h.field == "status" and (item.id, "status") not in seen:
+            seen.add((item.id, "status"))
+            moved.append(brief(item, {"from": h.old_value, "to": h.new_value,
+                                      "by": actor, "at": h.at.isoformat()}))
+        # apply_changes records this as "assignees" and stores display names, not handles.
+        elif h.field == "assignees" and user.name in (h.new_value or "") \
+                and user.name not in (h.old_value or "") and (item.id, "a") not in seen:
+            seen.add((item.id, "a"))
+            assigned.append(brief(item, {"by": actor, "at": h.at.isoformat()}))
+        elif h.field == "comment" and (item.id, "c") not in seen:
+            seen.add((item.id, "c"))
+            commented.append(brief(item, {"by": actor, "at": h.at.isoformat(),
+                                          "preview": (h.new_value or "")[:140]}))
+
+    # State you should know about now, regardless of when it changed.
+    spaces = {s.id: s for s in db.scalars(select(Space).where(Space.id.in_(space_ids)))}
+    blocked_now = blocked_keys(db, list(spaces.values()))
+    today = utcnow().date()
+    blocked, overdue = [], []
+    for item in items.values():
+        sp = spaces.get(item.space_id)
+        if not sp or category(sp, item.status) == "done":
+            continue
+        if item.key in blocked_now:
+            blocked.append(brief(item))
+        if item.due_date and item.due_date < today:
+            overdue.append(brief(item, {"due": item.due_date.isoformat()}))
+
+    total = len(moved) + len(assigned) + len(commented) + len(blocked) + len(overdue)
+    return {"since": since.isoformat(), "days": days, "total": total, "nothing": total == 0,
+            "assigned": assigned, "moved": moved, "commented": commented,
+            "blocked": blocked, "overdue": overdue}
 
 
 class ReadIn(BaseModel):
