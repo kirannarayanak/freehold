@@ -2,6 +2,7 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -29,9 +30,34 @@ async def _digest_loop():
             log.exception("Digest run failed")
 
 
+def run_migrations() -> None:
+    """Bring the schema to head, and adopt databases created before migrations existed.
+
+    Such a database has every table but no alembic_version, so running the baseline against it
+    would fail on tables that already exist. It is stamped at the baseline instead and then
+    upgraded, which leaves old and new installs on the same path.
+    """
+    from alembic import command
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+    from sqlalchemy import inspect
+
+    root = Path(__file__).resolve().parents[1]
+    cfg = Config(str(root / "alembic.ini"))
+    cfg.set_main_option("script_location", str(root / "migrations"))
+    cfg.attributes["configure_logger"] = False
+
+    tables = set(inspect(engine).get_table_names())
+    if tables and "alembic_version" not in tables:
+        baseline = ScriptDirectory.from_config(cfg).get_bases()[0]
+        log.info("Adopting an existing database at baseline %s", baseline)
+        command.stamp(cfg, baseline)
+    command.upgrade(cfg, "head")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(engine)
+    run_migrations()
     task = asyncio.create_task(_digest_loop())
     yield
     task.cancel()

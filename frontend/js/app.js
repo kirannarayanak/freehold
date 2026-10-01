@@ -17,7 +17,7 @@
     ["updated", "Other edits on work you are involved in"]];
 
   const S = {
-    me: null, users: [], userById: {}, spaces: [], space: null, role: null, members: [], sprints: [], items: [],
+    me: null, users: [], userById: {}, spaces: [], space: null, role: null, members: [], sprints: [], versions: [], items: [],
     links: [], filters: [], byKey: {}, serverTime: null, view: "board", lanes: "none", query: "", selected: new Set(),
     sortK: "key", sortDir: 1, calMonth: null, notes: { unread: 0, items: [] }, openKey: null, detail: null,
     descEdit: false, descPreview: false, editComment: null, dtab: "comments", reportSprint: null, dragging: null,
@@ -86,11 +86,13 @@
     (S.space ? S.space.statuses : []).forEach(s => (cats[s.name] = s.category));
     const sprints = {};
     S.sprints.forEach(s => (sprints[s.id] = { name: s.name, state: s.state }));
+    const versions = {};
+    (S.versions || []).forEach(v => (versions[v.id] = { name: v.name, released: v.released }));
     const users = {};
     S.users.forEach(u => (users[u.id] = { name: u.name, handle: u.handle, email: u.email }));
     const parents = {};
     S.items.forEach(i => (parents[i.key] = i.title));
-    return { users, sprints, categories: cats, parents, blocked: blockedSet(), me: S.me.id, today: new Date() };
+    return { users, sprints, versions, categories: cats, parents, blocked: blockedSet(), me: S.me.id, today: new Date() };
   }
   /* Apply the filter bar. Returns {items, ordered}; shows errors under the input without blocking the view. */
   function filtered(items) {
@@ -190,6 +192,7 @@
   async function loadSpace(key) {
     const b = await API.get("/api/spaces/" + encodeURIComponent(key));
     S.space = b.space; S.role = b.space.role; S.members = b.members; S.sprints = b.sprints; S.items = b.items;
+    S.versions = b.versions || [];
     S.links = b.links; S.filters = b.filters; S.serverTime = b.server_time; S.selected.clear(); S.wf = null;
     S.importResult = "";
     b.members.forEach(m => { if (!S.userById[m.id]) { S.userById[m.id] = m; S.users.push(m); } });
@@ -1035,7 +1038,7 @@
       ch.items.forEach(upsert);
       ch.deleted.forEach(removeItem);
       const role = S.role;
-      S.sprints = ch.sprints; S.links = ch.links; S.members = ch.members; S.space = ch.space; S.role = ch.space.role || role;
+      S.sprints = ch.sprints; S.versions = ch.versions || S.versions; S.links = ch.links; S.members = ch.members; S.space = ch.space; S.role = ch.space.role || role;
       const active = document.activeElement;
       const typing = active && $("#view").contains(active) && /INPUT|TEXTAREA|SELECT/.test(active.tagName);
       if ((touched.size || ch.deleted.length) && !typing && !["settings", "profile", "admin", "activity", "reports"].includes(S.view)) renderView();

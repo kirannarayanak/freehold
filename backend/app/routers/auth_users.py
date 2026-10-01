@@ -1,7 +1,7 @@
 """Sign-up, sign-in, profile and site user management."""
 import re
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from .. import config, notify
 from ..db import get_db
 from ..models import User
-from ..security import (create_token, current_user, hash_password, make_handle, require_site_admin,
+from ..security import (check_login_allowed, clear_login_failures, create_token, current_user,
+                        hash_password, make_handle, record_login_failure, require_site_admin,
                         verify_password)
 from ..services import user_to_dict
 
@@ -81,12 +82,15 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
 
 
 @router.post("/auth/login")
-def login(body: LoginIn, db: Session = Depends(get_db)):
+def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
+    check_login_allowed(request, body.email)
     user = db.scalar(select(User).where(User.email == body.email.strip().lower()))
     if not user or not verify_password(body.password, user.password_hash):
+        record_login_failure(request, body.email)
         raise HTTPException(401, "That email and password do not match.")
     if not user.is_active:
         raise HTTPException(403, "This account has been deactivated.")
+    clear_login_failures(request, body.email)
     return {"token": create_token(user), "user": user_to_dict(user, private=True)}
 
 

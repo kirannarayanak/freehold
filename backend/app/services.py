@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from . import notify
 from .db import utcnow
 from .models import (PRIORITIES, TYPES, Attachment, Comment, History, Link, Membership, Space, Sprint, User,
-                     WorkItem)
+                     Version, WorkItem)
 from .query import Context
 
 MENTION_RE = re.compile(r"(?<![\w@])@([a-z0-9._-]+)", re.I)
@@ -30,6 +30,11 @@ def user_to_dict(u: User, private: bool = False) -> dict:
 def space_to_dict(s: Space, role: str | None = None) -> dict:
     return {"id": s.id, "key": s.key, "name": s.name, "description": s.description, "statuses": s.statuses,
             "settings": s.settings or {}, "role": role}
+
+
+def version_to_dict(v: "Version") -> dict:
+    return {"id": v.id, "name": v.name, "description": v.description, "release_date": iso(v.release_date),
+            "released": v.released, "archived": v.archived, "released_at": iso(v.released_at)}
 
 
 def sprint_to_dict(s: Sprint) -> dict:
@@ -65,6 +70,7 @@ def item_to_dict(item: WorkItem, cnt: dict | None = None) -> dict:
         "logged": round(item.logged_hours or 0, 2), "start": iso(item.start_date), "due": iso(item.due_date),
         "labels": list(item.labels or []), "checklist": list(item.checklist or []),
         "parent_key": item.parent.key if item.parent else None, "sprint_id": item.sprint_id,
+        "version_id": item.version_id,
         "rank": item.rank, "external_key": item.external_key, "created_at": iso(item.created_at),
         "updated_at": iso(item.updated_at), "resolved_at": iso(item.resolved_at),
         "comment_count": cnt["comments"].get(item.id, 0), "attachment_count": cnt["attachments"].get(item.id, 0),
@@ -107,11 +113,14 @@ def build_context(db: Session, spaces: list[Space], me: User, items: list[dict])
     users = {u.id: {"name": u.name, "handle": u.handle, "email": u.email} for u in db.scalars(select(User))}
     sprints = {s.id: {"name": s.name, "state": s.state}
                for s in db.scalars(select(Sprint).where(Sprint.space_id.in_([s.id for s in spaces])))}
+    versions = {v.id: {"name": v.name, "released": v.released}
+                for v in db.scalars(select(Version).where(Version.space_id.in_([s.id for s in spaces])))}
     cats = {}
     for s in spaces:
         for st in s.statuses:
             cats.setdefault(st["name"], st.get("category", "todo"))
-    return Context(users=users, sprints=sprints, categories=cats, parents={i["key"]: i["title"] for i in items},
+    return Context(users=users, sprints=sprints, versions=versions, categories=cats,
+                   parents={i["key"]: i["title"] for i in items},
                    blocked=blocked_keys(db, spaces), me=me.id, today=date.today())
 
 
@@ -279,6 +288,17 @@ def apply_changes(db: Session, space: Space, item: WorkItem, actor: User, data: 
                 raise HTTPException(422, "You cannot add work to a completed sprint.")
         old = db.get(Sprint, item.sprint_id).name if item.sprint_id and db.get(Sprint, item.sprint_id) else "Backlog"
         set_field("sprint", "sprint_id", sprint.id if sprint else None, old, sprint.name if sprint else "Backlog")
+    if "version_id" in data:
+        vid = data["version_id"]
+        version = None
+        if vid not in (None, "", "none"):
+            version = db.get(Version, int(vid))
+            if not version or version.space_id != space.id:
+                raise HTTPException(422, "That version is not in this space.")
+            if version.archived:
+                raise HTTPException(422, "That version is archived. Unarchive it before assigning work to it.")
+        old = db.get(Version, item.version_id).name if item.version_id and db.get(Version, item.version_id) else ""
+        set_field("version", "version_id", version.id if version else None, old, version.name if version else "")
     if "rank" in data and data["rank"] is not None:
         item.rank = float(data["rank"])
 

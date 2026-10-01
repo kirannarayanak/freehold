@@ -318,6 +318,11 @@ dialog:focus-visible { outline: none; }
 .md pre code { border: 0; padding: 0; background: none; }
 .md blockquote { margin: 4px 0 8px; padding-left: 10px; border-left: 3px solid var(--line); color: var(--muted); }
 .md hr { border: 0; border-top: 1px solid var(--line); }
+.md-tbl { border-collapse: collapse; margin: 8px 0; width: 100%; font-size: 13px; }
+.md-tbl th, .md-tbl td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+.md-tbl th { background: var(--paper-2); font-weight: 600; }
+.md-tbl td.md-r, .md-tbl th.md-r { text-align: right; }
+.md-tbl td.md-c, .md-tbl th.md-c { text-align: center; }
 .desc { padding: 8px 10px; border-radius: 6px; margin-left: -10px; min-height: 40px; }
 .desc.editable { cursor: text; } .desc.editable:hover { background: var(--hover); }
 .md-edit { border: 1px solid var(--line); border-radius: 6px; padding: 6px; }

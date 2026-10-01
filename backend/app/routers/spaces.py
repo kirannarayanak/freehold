@@ -10,10 +10,10 @@ from sqlalchemy.orm import Session
 from .. import config
 from ..db import get_db, utcnow
 from ..models import (DEFAULT_STATUSES, ROLES, Attachment, History, Membership, SavedFilter, Space, Sprint, User,
-                      WorkItem)
+                      Version, WorkItem)
 from ..security import current_user, get_space, space_role
 from ..services import (category, counts, item_to_dict, record, space_links, space_to_dict, sprint_to_dict,
-                        user_to_dict)
+                        user_to_dict, version_to_dict)
 
 router = APIRouter(prefix="/api", tags=["spaces"])
 KEY_RE = re.compile(r"^[A-Z][A-Z0-9]{1,9}$")
@@ -134,7 +134,8 @@ def space_bundle(key: str, user: User = Depends(current_user), db: Session = Dep
     return {
         "space": space_to_dict(space, role), "members": _members(db, space),
         "sprints": [sprint_to_dict(s) for s in sprints], "items": [item_to_dict(i, cnt) for i in items],
-        "links": space_links(db, space), "filters": _filters(db, space, user), "server_time": utcnow().isoformat(),
+        "versions": _versions(db, space), "links": space_links(db, space),
+        "filters": _filters(db, space, user), "server_time": utcnow().isoformat(),
     }
 
 
@@ -153,8 +154,8 @@ def space_changes(key: str, since: str, user: User = Depends(current_user), db: 
                                                              History.field == "deleted", History.at > moment)))
     sprints = db.scalars(select(Sprint).where(Sprint.space_id == space.id).order_by(Sprint.id))
     return {"space": space_to_dict(space, role), "items": [item_to_dict(i, cnt) for i in items], "deleted": deleted,
-            "sprints": [sprint_to_dict(s) for s in sprints], "links": space_links(db, space),
-            "members": _members(db, space), "server_time": now.isoformat()}
+            "sprints": [sprint_to_dict(s) for s in sprints], "versions": _versions(db, space),
+            "links": space_links(db, space), "members": _members(db, space), "server_time": now.isoformat()}
 
 
 @router.patch("/spaces/{key}")
@@ -274,6 +275,98 @@ def _sprint(db: Session, sprint_id: int, user: User, need="member") -> tuple[Spr
     space = db.get(Space, sprint.space_id)
     get_space(db, space.key, user, need=need)
     return sprint, space
+
+
+class VersionIn(BaseModel):
+    name: str
+    description: str = ""
+    release_date: str | None = None
+
+
+class VersionPatch(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    release_date: str | None = None
+    released: bool | None = None
+    archived: bool | None = None
+
+
+def _versions(db: Session, space: Space) -> list[dict]:
+    rows = db.scalars(select(Version).where(Version.space_id == space.id).order_by(Version.id))
+    return [version_to_dict(v) for v in rows]
+
+
+def _version(db: Session, version_id: int, user: User, need: str = "member") -> tuple[Version, Space]:
+    version = db.get(Version, version_id)
+    if not version:
+        raise HTTPException(404, "That version was not found.")
+    space = db.get(Space, version.space_id)
+    get_space(db, space.key, user, need=need)
+    return version, space
+
+
+@router.get("/spaces/{key}/versions")
+def list_versions(key: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    space, _ = get_space(db, key, user)
+    return _versions(db, space)
+
+
+@router.post("/spaces/{key}/versions")
+def create_version(key: str, body: VersionIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    space, _ = get_space(db, key, user, need="member")
+    name = body.name.strip()[:120]
+    if not name:
+        raise HTTPException(422, "A version needs a name.")
+    if db.scalar(select(Version.id).where(Version.space_id == space.id, Version.name == name)):
+        raise HTTPException(409, f"This space already has a version called {name}.")
+    version = Version(space_id=space.id, name=name, description=body.description or "",
+                      release_date=_date(body.release_date, "Release date"))
+    db.add(version)
+    db.commit()
+    return version_to_dict(version)
+
+
+@router.patch("/versions/{version_id}")
+def update_version(version_id: int, body: VersionPatch, user: User = Depends(current_user),
+                   db: Session = Depends(get_db)):
+    version, space = _version(db, version_id, user)
+    if body.name is not None:
+        name = body.name.strip()[:120]
+        if not name:
+            raise HTTPException(422, "A version needs a name.")
+        clash = db.scalar(select(Version.id).where(Version.space_id == space.id, Version.name == name,
+                                                   Version.id != version.id))
+        if clash:
+            raise HTTPException(409, f"This space already has a version called {name}.")
+        version.name = name
+    if body.description is not None:
+        version.description = body.description
+    if body.release_date is not None:
+        version.release_date = _date(body.release_date, "Release date")
+    if body.archived is not None:
+        version.archived = body.archived
+    if body.released is not None and body.released != version.released:
+        if body.released:
+            open_items = db.scalar(select(func.count(WorkItem.id)).where(
+                WorkItem.version_id == version.id,
+                WorkItem.resolved_at.is_(None)))
+            if open_items:
+                raise HTTPException(422, f"{open_items} item(s) in {version.name} are not finished. "
+                                         "Move them to another version or finish them first.")
+        version.released = body.released
+        version.released_at = utcnow() if body.released else None
+    db.commit()
+    return version_to_dict(version)
+
+
+@router.delete("/versions/{version_id}")
+def delete_version(version_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    version, _ = _version(db, version_id, user, need="admin")
+    # Work is never deleted with the version: the column is SET NULL, so items simply lose their
+    # fix version and stay where they are.
+    db.delete(version)
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/spaces/{key}/sprints")

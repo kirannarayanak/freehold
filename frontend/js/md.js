@@ -65,6 +65,25 @@
         out.push((ordered ? "<ol>" : "<ul>") + items.join("") + (ordered ? "</ol>" : "</ul>"));
         continue;
       }
+      // Tables: a header row, a |---|---| separator, then body rows. Checked before <hr> because
+      // a separator line of dashes would otherwise be eaten as a horizontal rule.
+      if (line.indexOf("|") >= 0 && i + 1 < lines.length &&
+          /^\s*\|?(\s*:?-{2,}:?\s*\|)+\s*:?-{2,}:?\s*\|?\s*$/.test(lines[i + 1].trim().replace(/^\|?/, "|").replace(/\|?$/, "|"))) {
+        flush();
+        const cells = r => r.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map(c => c.trim());
+        const align = cells(lines[i + 1]).map(c =>
+          /^:.*:$/.test(c) ? " class=\"md-c\"" : /:$/.test(c) ? " class=\"md-r\"" : "");
+        const head = cells(line);
+        i += 2;
+        const body = [];
+        while (i < lines.length && lines[i].indexOf("|") >= 0 && lines[i].trim()) body.push(cells(lines[i++]));
+        const cell = (text, n, tag) => "<" + tag + (align[n] || "") + ">" + inline(text || "", ctx) + "</" + tag + ">";
+        out.push('<table class="md-tbl"><thead><tr>' + head.map((c, n) => cell(c, n, "th")).join("") +
+          "</tr></thead><tbody>" +
+          body.map(r => "<tr>" + head.map((_, n) => cell(r[n], n, "td")).join("") + "</tr>").join("") +
+          "</tbody></table>");
+        continue;
+      }
       if (/^\s*(---|\*\*\*)\s*$/.test(line)) { flush(); out.push("<hr>"); i++; continue; }
       if (!line.trim()) { flush(); i++; continue; }
       para.push(line);

@@ -252,6 +252,91 @@ def test_prototype_and_export_roundtrip(client, world):
     assert csv_text.startswith("Key,Summary") and "COPY-1" in csv_text
 
 
+def test_login_rate_limit(client, world):
+    from app import security
+    security._failures.clear()
+    try:
+        for _ in range(security.LOGIN_MAX_FAILURES):
+            assert client.post("/api/auth/login",
+                               json={"email": "bob@example.com", "password": "wrong"}).status_code == 401
+        # Further attempts are refused before the password is even checked, and the right password
+        # does not get through either: otherwise the limit would only slow down wrong guesses.
+        r = client.post("/api/auth/login", json={"email": "bob@example.com", "password": "wrong"})
+        assert r.status_code == 429 and "Retry-After" in r.headers
+        assert client.post("/api/auth/login",
+                           json={"email": "bob@example.com", "password": "password1"}).status_code == 429
+        # A different account from the same client is still limited by the per-address counter,
+        # so spraying many accounts is covered too.
+        assert client.post("/api/auth/login",
+                           json={"email": "carol@example.com", "password": "password1"}).status_code == 429
+    finally:
+        security._failures.clear()
+    assert client.post("/api/auth/login",
+                       json={"email": "bob@example.com", "password": "password1"}).status_code == 200
+
+
+def test_items_nest_arbitrarily_deep(client, world):
+    """Jira cannot do this: JRA-4446 has over a thousand votes and is still open."""
+    A = world["A"]
+    parent_key, chain = None, []
+    for i in range(5):
+        body = {"title": f"depth {i}", "type": "Epic" if i == 0 else "Subtask"}
+        if parent_key:
+            body["parent_key"] = parent_key
+        r = client.post("/api/spaces/WEB/items", json=body, headers=A)
+        assert r.status_code == 200, r.text
+        parent_key = r.json()["key"]
+        chain.append(parent_key)
+    # Five levels, and each one really points at the one above it.
+    for child, parent in zip(chain[1:], chain):
+        assert client.get(f"/api/items/{child}", headers=A).json()["item"]["parent_key"] == parent
+    # Depth is free; cycles are not.
+    r = client.patch(f"/api/items/{chain[0]}", json={"parent_key": chain[-1]}, headers=A)
+    assert r.status_code == 422 and "loop" in r.json()["detail"]
+
+
+def test_versions_and_releases(client, world):
+    A, B = world["A"], world["B"]
+    r = client.post("/api/spaces/WEB/versions", json={"name": "1.0", "release_date": "2026-11-01"}, headers=A)
+    assert r.status_code == 200, r.text
+    v1 = r.json()
+    assert v1["name"] == "1.0" and v1["released"] is False and v1["release_date"] == "2026-11-01"
+    # Names are unique inside a space.
+    assert client.post("/api/spaces/WEB/versions", json={"name": "1.0"}, headers=A).status_code == 409
+
+    item = client.post("/api/spaces/WEB/items", json={"title": "Ship it"}, headers=A).json()
+    item = client.patch(f"/api/items/{item['key']}", json={"version_id": v1["id"]}, headers=A).json()
+    assert item["version_id"] == v1["id"]
+    # A later change is in history under a readable name, not an id, so the trail survives a rename.
+    # (Values set at creation are folded into the single "created" row by design.)
+    hist = client.get(f"/api/items/{item['key']}", headers=A).json()["history"]
+    assert any(h["field"] == "version" and h["new"] == "1.0" for h in hist)
+
+    # The bundle carries versions, so the browser can render them without another request.
+    bundle = client.get("/api/spaces/WEB", headers=A).json()
+    assert [v["name"] for v in bundle["versions"]] == ["1.0"]
+
+    # A version cannot be released while work in it is unfinished.
+    r = client.patch(f"/api/versions/{v1['id']}", json={"released": True}, headers=A)
+    assert r.status_code == 422 and "not finished" in r.json()["detail"]
+
+    done = [st["name"] for st in bundle["space"]["statuses"] if st["category"] == "done"][0]
+    client.patch(f"/api/items/{item['key']}", json={"status": done}, headers=A)
+    assert client.patch(f"/api/versions/{v1['id']}", json={"released": True}, headers=A).json()["released"] is True
+
+    # Archived versions stop accepting new work.
+    v2 = client.post("/api/spaces/WEB/versions", json={"name": "1.1"}, headers=A).json()
+    client.patch(f"/api/versions/{v2['id']}", json={"archived": True}, headers=A)
+    r = client.patch(f"/api/items/{item['key']}", json={"version_id": v2["id"]}, headers=A)
+    assert r.status_code == 422 and "archived" in r.json()["detail"]
+
+    # Only admins delete, and deleting a version never deletes the work in it.
+    assert client.delete(f"/api/versions/{v2['id']}", headers=B).status_code == 403
+    assert client.delete(f"/api/versions/{v1['id']}", headers=A).status_code == 200
+    after = client.get(f"/api/items/{item['key']}", headers=A).json()["item"]
+    assert after["version_id"] is None and after["title"] == "Ship it"
+
+
 def test_profile_admin_and_delete(client, world):
     A, B = world["A"], world["B"]
     assert client.patch("/api/me", json={"current_password": "wrong", "new_password": "newpassword"}, headers=B).status_code == 403

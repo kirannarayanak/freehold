@@ -79,6 +79,20 @@ class Sprint(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class Version(Base):
+    """A release. Sprints are when work happens; versions are what ships."""
+    __tablename__ = "versions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    space_id: Mapped[int] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str] = mapped_column(Text, default="")
+    release_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    released: Mapped[bool] = mapped_column(Boolean, default=False)
+    archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    released_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class WorkItem(Base):
     __tablename__ = "work_items"
     __table_args__ = (UniqueConstraint("space_id", "number"),)
@@ -101,6 +115,7 @@ class WorkItem(Base):
     checklist: Mapped[list] = mapped_column(JSON, default=list)
     parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("work_items.id", ondelete="SET NULL"), nullable=True)
     sprint_id: Mapped[Optional[int]] = mapped_column(ForeignKey("sprints.id", ondelete="SET NULL"), nullable=True)
+    version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("versions.id", ondelete="SET NULL"), nullable=True)
     rank: Mapped[float] = mapped_column(Float, default=0)
     external_key: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

@@ -3,7 +3,8 @@
   const PRIORITY_ORDER = ["Highest", "High", "Medium", "Low"];
   const ALIASES = { summary: "title", issuetype: "type", worktype: "type", labels: "label", epic: "parent",
     duedate: "due", startdate: "start", storypoints: "points", statuscategory: "category", project: "space",
-    watchers: "watcher", assignees: "assignee" };
+    watchers: "watcher", assignees: "assignee",
+    fixversion: "version", fixversions: "version", release: "version" };
   const DATE_FIELDS = { due: "due", start: "start", created: "created_at", updated: "updated_at", resolved: "resolved_at" };
   const NUM_FIELDS = { points: "points", estimate: "estimate", logged: "logged" };
   const EXACT_FIELDS = new Set(["priority", "type", "category", "space", "key"]);
@@ -159,6 +160,8 @@
       case "label": return (it.labels || []).slice();
       case "parent": return it.parent_key ? [it.parent_key, ctx.parents[it.parent_key] || ""] : [];
       case "sprint": { const s = ctx.sprints[it.sprint_id]; return s ? [s.name, s.state] : ["backlog"]; }
+      case "version": { const v = (ctx.versions || {})[it.version_id];
+        return v ? [v.name, v.released ? "released" : "unreleased"] : ["none"]; }
       case "space": return [it.key.split("-")[0]];
     }
     return null;
@@ -168,13 +171,15 @@
     const checks = { open: !done, done, closed: done, resolved: done, blocked: ctx.blocked.has(it.key),
       overdue: !!it.due && it.due < ctx.todayIso && !done, unassigned: !it.assignee_ids.length, assigned: !!it.assignee_ids.length,
       mine: it.assignee_ids.includes(ctx.me), watching: (it.watcher_ids || []).includes(ctx.me),
-      backlog: it.sprint_id == null, epic: it.type === "Epic" };
+      backlog: it.sprint_id == null, epic: it.type === "Epic",
+      unversioned: it.version_id == null };
     if (!(v in checks)) throw new QueryError("is:" + value + " is not supported. Try is:open, is:done, is:blocked, is:overdue or is:mine.");
     return checks[v];
   }
   function empty(f, it) {
     if (f === "assignee") return !it.assignee_ids.length;
     if (f === "reporter") return !it.reporter_id;
+    if (f === "version") return it.version_id == null;
     if (f === "label") return !(it.labels || []).length;
     if (f === "sprint") return it.sprint_id == null;
     if (f === "parent") return !it.parent_key;

@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import os
 import re
+import time
 from datetime import timedelta
 
 import jwt
@@ -17,6 +18,47 @@ from .models import Membership, Space, User
 
 ROLE_ORDER = {"viewer": 0, "member": 1, "admin": 2}
 _SCRYPT = dict(n=2**14, r=8, p=1, dklen=32)
+
+LOGIN_MAX_FAILURES = int(os.getenv("LOGIN_MAX_FAILURES", "8"))
+LOGIN_WINDOW_SECONDS = int(os.getenv("LOGIN_WINDOW_SECONDS", "300"))
+_failures: dict[str, list[float]] = {}
+
+
+def _recent(key: str, now: float) -> list[float]:
+    hits = [t for t in _failures.get(key, []) if now - t < LOGIN_WINDOW_SECONDS]
+    if hits:
+        _failures[key] = hits
+    else:
+        _failures.pop(key, None)
+    return hits
+
+
+def check_login_allowed(request: Request, email: str) -> None:
+    """Refuse a sign-in attempt after repeated failures, before any password is checked.
+
+    Counted per client address and per address+email together, so one attacker spraying many
+    accounts is stopped as well as one account being brute forced from many places. The window
+    is in memory, which means it resets on restart and is not shared between app containers:
+    it raises the cost of guessing, it is not a substitute for a rate limiter at the proxy.
+    """
+    now = time.monotonic()
+    client = request.client.host if request.client else "unknown"
+    for key in (f"ip:{client}", f"user:{client}:{email.strip().lower()}"):
+        if len(_recent(key, now)) >= LOGIN_MAX_FAILURES:
+            raise HTTPException(429, "Too many sign-in attempts. Wait a few minutes and try again.",
+                                headers={"Retry-After": str(LOGIN_WINDOW_SECONDS)})
+
+
+def record_login_failure(request: Request, email: str) -> None:
+    now = time.monotonic()
+    client = request.client.host if request.client else "unknown"
+    for key in (f"ip:{client}", f"user:{client}:{email.strip().lower()}"):
+        _failures.setdefault(key, []).append(now)
+
+
+def clear_login_failures(request: Request, email: str) -> None:
+    client = request.client.host if request.client else "unknown"
+    _failures.pop(f"user:{client}:{email.strip().lower()}", None)
 
 
 def hash_password(password: str) -> str:

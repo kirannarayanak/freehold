@@ -11,6 +11,8 @@ COPY backend/requirements.txt backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
 COPY backend/app backend/app
+COPY backend/alembic.ini backend/alembic.ini
+COPY backend/migrations backend/migrations
 COPY frontend frontend
 
 RUN useradd --create-home --uid 1000 freehold \

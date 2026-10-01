@@ -20,6 +20,7 @@ ALIASES = {
     "summary": "title", "issuetype": "type", "worktype": "type", "labels": "label", "epic": "parent",
     "duedate": "due", "startdate": "start", "storypoints": "points", "statuscategory": "category",
     "project": "space", "watchers": "watcher", "assignees": "assignee",
+    "fixversion": "version", "fixversions": "version", "release": "version",
 }
 DATE_FIELDS = {"due": "due", "start": "start", "created": "created_at", "updated": "updated_at",
                "resolved": "resolved_at"}
@@ -35,6 +36,7 @@ class QueryError(ValueError):
 class Context:
     users: dict = field(default_factory=dict)        # id -> {"name","handle","email"}
     sprints: dict = field(default_factory=dict)      # id -> {"name","state"}
+    versions: dict = field(default_factory=dict)     # id -> {"name","released"}
     categories: dict = field(default_factory=dict)   # status name -> todo|doing|done
     parents: dict = field(default_factory=dict)      # key -> title
     blocked: set = field(default_factory=set)        # keys blocked by an unfinished item
@@ -260,6 +262,9 @@ def _strings(f, item, ctx):
     if f == "sprint":
         s = ctx.sprints.get(item.get("sprint_id"))
         return [s["name"], s["state"]] if s else ["backlog"]
+    if f == "version":
+        v = ctx.versions.get(item.get("version_id"))
+        return [v["name"], "released" if v["released"] else "unreleased"] if v else ["none"]
     if f == "space":
         return [item["key"].split("-")[0]]
     return None
@@ -275,6 +280,7 @@ def _is(value, item, ctx):
         "unassigned": not item["assignee_ids"], "assigned": bool(item["assignee_ids"]),
         "mine": ctx.me in item["assignee_ids"], "watching": ctx.me in item.get("watcher_ids", []),
         "backlog": item.get("sprint_id") is None, "epic": item["type"] == "Epic",
+        "unversioned": item.get("version_id") is None,
     }
     if v not in checks:
         raise QueryError(f"is:{value} is not supported. Try is:open, is:done, is:blocked, is:overdue or is:mine.")
@@ -286,6 +292,8 @@ def _empty(f, item):
         return not item["assignee_ids"]
     if f == "reporter":
         return not item.get("reporter_id")
+    if f == "version":
+        return not item.get("version_id")
     if f == "label":
         return not item["labels"]
     if f == "sprint":
