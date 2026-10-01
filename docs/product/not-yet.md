@@ -15,6 +15,10 @@ For contrast, these were blocked an hour ago and are not any more.
 | | Why it was blocked | How it got unblocked |
 |---|---|---|
 | **Schema migrations** | Nothing. It was simply unbuilt, and it blocked everything else | Alembic at startup; databases predating it are adopted at the baseline |
+| **Outgoing webhooks** | Nothing | Built. Signed, off the request thread, failures recorded |
+| **Personal access tokens** | Nothing | Built. Hash-only storage, optional expiry |
+| **Draft recovery** | Nothing | Built. Comments and descriptions survive navigation |
+| **Release notes** | Needed versions to exist | Built, generated from what is in the version |
 | **Versions and releases** | Needed a new column on an existing table, which `create_all` can never add | Migrations landed first |
 | **Login rate limiting** | Nothing | Built; a live security gap closed |
 | **Markdown tables** | Nothing | Built, escape-first, with alignment |
@@ -40,7 +44,7 @@ Cannot be built responsibly from here. Not hard, just unverifiable, and unverifi
 | **Password reset by email** | Token flow is easy; I cannot verify mail arrives. A reset that silently fails is worse than none, because people lock themselves out waiting | SMTP credentials on a real instance, even a throwaway | Half a day | **Yes, quickly** |
 | **Email-to-item** | Needs an inbound mail path. None exists here | A mailbox to poll over IMAP | 2 days | Yes |
 | **Git integration** (branches, PRs, builds) | Needs OAuth credentials and a publicly reachable callback. localhost cannot receive a webhook from github.com | An OAuth app plus a reachable URL or a tunnel | 3–4 days | Yes |
-| **Smart commits** (`FH-12 #done #time 2h`) | Only needs the webhook receiver, which is unblocked | Build webhooks first | 1 day | **Yes — cheapest high-value win** |
+| **Smart commits** (`FH-12 #done #time 2h`) | Needs an *incoming* receiver. Outgoing hooks now exist; incoming does not | Build the receiver, then point a Git host at it | 1 day | **Yes — now the cheapest win** |
 | **Jira attachment import** | **The genuinely hard one. A Jira CSV does not contain files, only URLs needing authentication.** No importer work fixes this | Jira API credentials while the instance is still alive | 1 day | **Yes, but only before the instance goes read-only. After that the files are gone** |
 
 ### Unblocked, just unbuilt
@@ -49,15 +53,11 @@ Nothing external needed. Listed in the order I would build them.
 
 | Feature | Why not now | Cost | Later? |
 |---|---|---|---|
-| **Webhooks out** | Time. The integration floor: automation, git and chat all sit on it | 1–2 days | **Yes — first** |
-| **Personal access tokens** | Time. Scripts must currently log in as a human with a password | 1 day | Yes — second |
 | **Custom fields** | Size. Touches the model, API, OQL, both parsers, the UI and the importer | 1–2 weeks | **Yes — the biggest parity gap** |
 | **Stale-work detection** | Time. Time-in-status is already derivable from history | 2 days | Yes, cheap and beyond Jira |
 | **Catch-up view** | Time. The data exists today | 3 days | Yes, beyond Jira |
-| **Draft recovery** | Time. Pure frontend, `localStorage` | 1 day | Yes |
 | **Automation rules** | Needs webhooks first. Largest block Jira has that we do not | 2–3 weeks | Yes, deliberately smaller than Jira's |
 | **Dashboards** | Size. Opening on a board instead is defensible | 1–2 weeks | Yes |
-| **Release notes generation** | Time. All the data landed with versions | 1 day | Yes, easy now |
 | **Release hub view** | Time. The API is complete; no screen yet | 2 days | Yes |
 | **Affects version** | Time | Half a day | Yes |
 | **Components** | Labels cover most of it today | 2 days | Yes, low priority |

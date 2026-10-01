@@ -23,7 +23,8 @@ Status is honest and checked against the code, not aspirational:
 | **Automation** | **Not built. The largest single functional block Jira has and we do not** |
 | **Development tooling** (branches, PRs, builds) | **Not built. Why engineers tolerate Jira** |
 | **Dashboards** | **Not built** |
-| **SSO and password reset** | **Not built. Blocks company adoption.** Rate limiting is now built |
+| **SSO and password reset** | **Not built. Blocks company adoption.** Rate limiting is built |
+| Webhooks, API tokens, release notes, drafts | Built |
 | Schema migrations | Built. Upgrades are safe now |
 | Service management (portal, SLAs) | Out of scope. Freehold is a tracker, not a service desk |
 
@@ -145,7 +146,7 @@ Status is honest and checked against the code, not aspirational:
 | Capability | Jira | Freehold | Notes |
 |---|---|---|---|
 | REST API | Yes | **Built** | Whole app is API-first; OpenAPI at `/docs` |
-| Webhooks | Yes | **Planned** | |
+| Webhooks | Yes | **Built** | Per space, signed, delivered off the request thread |
 | Automation rules | Yes | **Planned** | |
 | Git / CI integration | Yes | **Planned** | Smart commits, branch and PR linking |
 | Chat integration | Yes | **Planned** | |
@@ -225,7 +226,7 @@ Jira's dev panel is why engineers tolerate Jira. This is a complete gap.
 | Build and deployment status | Yes | **Not built** | |
 | Create a branch from an item | Yes | **Not built** | |
 | Git host integration (GitHub, GitLab, Bitbucket) | Yes | **Planned** | |
-| Webhooks out | Yes | **Planned** | The integration floor; nothing else can be built on top until this exists |
+| Webhooks out | Yes | **Built** | item created/updated/deleted, comment added, HMAC signed |
 | Incoming webhooks / REST-driven automation | Yes | **Partial** | The full REST API is there; no event push |
 
 ### Releases and versions
@@ -238,7 +239,7 @@ Jira's dev panel is why engineers tolerate Jira. This is a complete gap.
 | Archive a version | Yes | **Built** | Archived versions stop accepting new work |
 | Safe delete | Yes | **Built** | Deleting a version never deletes the work in it |
 | Release hub view | Yes | **Partial** | The API is complete; there is no dedicated release screen yet |
-| Generated release notes | Yes | **Planned** | The data is all there now |
+| Generated release notes | Yes | **Built** | Markdown, grouped by type, unfinished work listed honestly |
 | Affects version | Yes | **Planned** | |
 
 ### Planning and roadmaps
@@ -264,7 +265,7 @@ Jira gates all of this behind Premium. That makes it a fair target rather than a
 | Mentions | Yes | **Built** | |
 | Item templates | Add-on | **Planned** | |
 | Space documents / wiki | Confluence (separate product) | **Planned** | See Part 2, tool sprawl |
-| Draft recovery | Patchy in Jira | **Planned** | Losing a long comment is a common Jira complaint |
+| Draft recovery | Patchy in Jira | **Built** | Survives navigation; never leaves the browser |
 
 ### Service management
 
@@ -294,7 +295,7 @@ The quiet things people only notice when missing.
 | Command palette | Yes | **Built** | `Ctrl`/`Cmd` + `K` |
 | Dark mode | Yes | **Built** | Follows the OS by default |
 | Offline / air-gapped operation | No | **Built** | No CDN, no build step, no outbound calls |
-| Personal access tokens for scripts | Yes | **Planned** | Session tokens only today; a script has to log in as a user |
+| Personal access tokens for scripts | Yes | **Built** | `fh_` tokens, hash-only storage, optional expiry, use timestamped |
 | Email-to-item (create and comment by email) | Yes | **Not built** | |
 | Filter subscriptions (emailed on a schedule) | Yes | **Not built** | Digests exist, but not over a saved filter |
 | Bulk change driven by a query | Yes | **Partial** | Bulk edit works from the list selection, not from a query |

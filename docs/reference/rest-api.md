@@ -129,6 +129,50 @@ clamped to 7–180.
 | `POST` | `/api/spaces/{key}/import/jira` | Jira CSV, multipart |
 | `POST` | `/api/spaces/{key}/import/freehold` | Freehold JSON, multipart. Also accepts files exported before the rename |
 
+### Versions and releases
+
+| Method | Path | |
+|---|---|---|
+| `GET` `POST` | `/api/spaces/{key}/versions` | |
+| `PATCH` `DELETE` | `/api/versions/{id}` | Rename, set a date, release, archive. Releasing is refused while work in it is unfinished |
+| `GET` | `/api/versions/{id}/notes` | Generated release notes as markdown |
+
+### Webhooks
+
+| Method | Path | |
+|---|---|---|
+| `GET` `POST` | `/api/spaces/{key}/webhooks` | Space admin only. The signing secret is returned once, on creation |
+| `PATCH` `DELETE` | `/api/webhooks/{id}` | |
+| `POST` | `/api/webhooks/{id}/test` | Send a ping to confirm the receiver works |
+
+Events: `item.created` `item.updated` `item.deleted` `comment.created` `sprint.started` `sprint.completed`
+`version.released`. Subscribe to a subset, or leave the list empty for all.
+
+Each request carries `X-Freehold-Signature: sha256=<hmac>` over the raw body. Verify it:
+
+```python
+import hmac, hashlib
+expected = "sha256=" + hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+assert hmac.compare_digest(expected, request.headers["X-Freehold-Signature"])
+```
+
+Delivery is best effort and never blocks the write that triggered it. A receiver that is down does not
+stop anyone filing work; the failure is recorded on the hook and shown in Settings.
+
+### API tokens
+
+| Method | Path | |
+|---|---|---|
+| `GET` `POST` | `/api/me/tokens` | `POST` returns the token once. Only its hash is stored |
+| `DELETE` | `/api/me/tokens/{id}` | Revoked immediately |
+
+A token starts `fh_` and goes on the same `Authorization: Bearer` header as a session token, so every
+client works unchanged. It acts as the person who created it. Optional expiry via `expires_days`.
+
+```bash
+curl -s http://localhost:8080/api/spaces/WEB -H "Authorization: Bearer fh_..."
+```
+
 ### Health
 
 `GET /api/health` needs no authentication and checks the database. Use it for your load balancer.
@@ -147,5 +191,6 @@ curl -s -X PATCH http://localhost:8080/api/items/WEB-42 \
 
 ## Notes
 
-- There are no webhooks yet. Poll `/api/spaces/{key}/changes`, which is what the UI does every 15 seconds
-- No rate limiting yet, including on login. Put it behind a proxy that does, on a public network
+- Webhooks are outgoing only. There is no incoming receiver yet, so a Git host cannot push to Freehold
+- The UI still polls `/api/spaces/{key}/changes` every 15 seconds; there are no server-sent events
+- Login is rate limited in memory, per app process. Put a limiter at the proxy on a public network
