@@ -6,6 +6,14 @@ Free, open-source work tracking for software teams. Boards, backlogs, sprints an
 
 > **Status: beta.** This is Phase 1 of the roadmap. Expect rough edges, and use Settings > Export before upgrading.
 
+## Why this exists
+
+Atlassian is ending self-managed Jira. New Data Center subscriptions [closed to new customers on 30 March 2026](https://www.atlassian.com/licensing/data-center-end-of-life); existing customers can renew until 30 March 2028, and everything goes **read-only on 28 March 2029**.
+
+If you want your tracker on your own infrastructure, you can no longer buy Jira for it at any price.
+
+Freehold is a freehold, not a lease: your server, your database, your data, no licence check, no telemetry, and a complete export whenever you want to leave.
+
 ## Run it
 
 ```bash
@@ -34,6 +42,20 @@ uvicorn app.main:app --reload --port 8080
 ```
 
 This uses SQLite in `backend/data/`. Set `DATABASE_URL=postgresql+psycopg://user:pass@host:5432/db` for PostgreSQL. The web app in `frontend/` is plain JavaScript with no build step and no CDNs, so it works on locked-down and offline networks. Edit a file and reload.
+
+## Documentation
+
+Full documentation is in [docs/](docs/README.md).
+
+| | |
+|---|---|
+| [Install with Docker](docs/getting-started/install-docker.md) | The supported way to run it |
+| [Your first space](docs/getting-started/first-space.md) | Empty install to a running sprint |
+| [Migrating from Jira](docs/migrating/from-jira.md) | CSV import, what transfers, what does not |
+| [OQL query language](docs/reference/oql.md) | The filter language, in full |
+| [REST API](docs/reference/rest-api.md) | |
+| [Configuration](docs/admin-guide/configuration.md) | Every environment variable |
+| [Feature matrix](docs/product/feature-matrix.md) | Jira parity, real gaps, and what we will not build |
 
 ## What's in the beta
 
