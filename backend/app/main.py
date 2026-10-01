@@ -1,4 +1,4 @@
-"""OpenTrack API and web app."""
+"""Freehold API and web app."""
 import asyncio
 import logging
 from contextlib import asynccontextmanager
@@ -13,7 +13,7 @@ from .db import Base, SessionLocal, engine
 from .routers import auth_users, items, reports_io, spaces
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-log = logging.getLogger("opentrack")
+log = logging.getLogger("freehold")
 VERSION = "0.1.0-beta"
 
 
@@ -37,7 +37,7 @@ async def lifespan(app: FastAPI):
     task.cancel()
 
 
-app = FastAPI(title="OpenTrack", version=VERSION, lifespan=lifespan,
+app = FastAPI(title="Freehold", version=VERSION, lifespan=lifespan,
               description="Open-source work tracking. All endpoints live under /api; sign in to get a bearer token.")
 
 

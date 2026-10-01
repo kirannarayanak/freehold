@@ -12,7 +12,7 @@ from . import config
 from .db import utcnow
 from .models import Notification, User
 
-log = logging.getLogger("opentrack.notify")
+log = logging.getLogger("freehold.notify")
 
 EVENTS = {
     "assigned": "Someone assigns a work item to you",
@@ -85,7 +85,7 @@ def dispatch(db: Session, user: User, event: str, text: str, item_key: str, acto
     db.add(note)
     if wants_email and prefs["email_mode"] == "instant":
         link = f"{config.BASE_URL}/#/item/{item_key}" if item_key else config.BASE_URL
-        send_email(user.email, text, f"{text}\n\nOpen it: {link}\n\nChange what you get in OpenTrack under Profile > Notifications.")
+        send_email(user.email, text, f"{text}\n\nOpen it: {link}\n\nChange what you get in Freehold under Profile > Notifications.")
     return True
 
 
@@ -106,7 +106,7 @@ def send_due_digests(db: Session) -> int:
         user.prefs = stored
         if pending:
             lines = [f"- {n.text}  ({config.BASE_URL}/#/item/{n.item_key})" for n in pending]
-            send_email(user.email, f"OpenTrack: {len(pending)} updates", "Your daily summary:\n\n" + "\n".join(lines))
+            send_email(user.email, f"Freehold: {len(pending)} updates", "Your daily summary:\n\n" + "\n".join(lines))
             for n in pending:
                 n.email_pending = False
             sent += 1

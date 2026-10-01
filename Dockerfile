@@ -1,9 +1,9 @@
-# OpenTrack: one image serves the API and the web app.
+# Freehold: one image serves the API and the web app.
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    OPENTRACK_DATA=/data \
+    FREEHOLD_DATA=/data \
     FRONTEND_DIR=/app/frontend
 
 WORKDIR /app
@@ -13,10 +13,10 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 COPY backend/app backend/app
 COPY frontend frontend
 
-RUN useradd --create-home --uid 1000 opentrack \
+RUN useradd --create-home --uid 1000 freehold \
     && mkdir -p /data \
-    && chown opentrack:opentrack /data
-USER opentrack
+    && chown freehold:freehold /data
+USER freehold
 WORKDIR /app/backend
 
 EXPOSE 8080

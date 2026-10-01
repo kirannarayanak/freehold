@@ -3,12 +3,12 @@ import os
 import secrets
 from pathlib import Path
 
-DATA_DIR = Path(os.getenv("OPENTRACK_DATA", "./data")).resolve()
+DATA_DIR = Path(os.getenv("FREEHOLD_DATA") or os.getenv("OPENTRACK_DATA") or "./data").resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 UPLOAD_DIR = DATA_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATA_DIR / 'opentrack.db'}")
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATA_DIR / 'freehold.db'}")
 
 
 def _secret_key() -> str:
@@ -33,7 +33,7 @@ SMTP_HOST = os.getenv("SMTP_HOST", "")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-SMTP_FROM = os.getenv("SMTP_FROM", "OpenTrack <opentrack@localhost>")
+SMTP_FROM = os.getenv("SMTP_FROM", "Freehold <freehold@localhost>")
 SMTP_TLS = os.getenv("SMTP_TLS", "true").lower() == "true"
 
 FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", Path(__file__).resolve().parents[2] / "frontend"))

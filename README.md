@@ -1,4 +1,4 @@
-# OpenTrack
+# Freehold
 
 Free, open-source work tracking for software teams. Boards, backlogs, sprints and reports like Jira, without the weight, the per-seat bill or admin-controlled notification schemes. You host it, you own the data, and it starts with one command.
 
@@ -22,7 +22,7 @@ To change the port, database password, sign-up policy or email settings, copy `.
 
 **Update:** `git pull && docker compose up -d --build`. Your data lives in the `db` and `data` volumes.
 
-**Back up:** `docker compose exec db pg_dump -U opentrack opentrack > opentrack.sql`, plus the `data` volume (attachments and the signing key).
+**Back up:** `docker compose exec db pg_dump -U freehold freehold > freehold.sql`, plus the `data` volume (attachments and the signing key).
 
 ### Without Docker (development)
 
@@ -45,7 +45,7 @@ This uses SQLite in `backend/data/`. Set `DATABASE_URL=postgresql+psycopg://user
 - **Search** with a JQL-style query language, plus saved and shared filters.
 - **People and permissions**: site admins, and viewer, member or admin roles per space.
 - **Notifications each person controls**: in-app or email per event, instant or a daily digest, and mute for any single item. Admins cannot turn on noise for you.
-- **Import** from Jira CSV and from the OpenTrack browser prototype; **export** to JSON or CSV at any time.
+- **Import** from Jira CSV and from the Freehold browser prototype; **export** to JSON or CSV at any time.
 - **Speed**: the browser loads a space once and filters in memory; changes save optimistically and teammates' edits sync every 15 seconds.
 - **Command palette** (Ctrl K or Cmd K), keyboard shortcuts, one-line quick create, duplicate warnings, light and dark themes.
 - **REST API** with interactive docs at `/docs`.
@@ -98,14 +98,14 @@ That creates a Bug assigned to the member whose handle starts with `kiran`, with
 ## Moving from Jira
 
 1. In Jira, open a filter showing the work you want and export it as CSV with all fields.
-2. In OpenTrack, create the space and add your teammates as members first. People are matched by display name or email.
+2. In Freehold, create the space and add your teammates as members first. People are matched by display name or email.
 3. Go to **Settings > Import** and choose **Import Jira CSV**.
 
-What comes across: summary, description (as text), type, status, priority, assignee, reporter, labels, sprints, story points, parent and epic, comments, original estimate, time spent, and created, updated and resolved dates. Statuses OpenTrack does not know are added to your workflow with a sensible category. If the space key matches the Jira project key, work items keep their numbers; otherwise the old key is shown on each item.
+What comes across: summary, description (as text), type, status, priority, assignee, reporter, labels, sprints, story points, parent and epic, comments, original estimate, time spent, and created, updated and resolved dates. Statuses Freehold does not know are added to your workflow with a sensible category. If the space key matches the Jira project key, work items keep their numbers; otherwise the old key is shown on each item.
 
 Not yet imported: attachments, custom fields, issue links and workflow rules.
 
-**From the browser prototype:** download its backup JSON, then use **Settings > Import > Import OpenTrack JSON**.
+**From the browser prototype:** download its backup JSON, then use **Settings > Import > Import Freehold JSON**.
 
 ## API
 
@@ -126,7 +126,7 @@ The full, interactive reference is at http://localhost:8080/docs.
 | Variable | Default | Meaning |
 |---|---|---|
 | `DATABASE_URL` | SQLite in the data folder | `postgresql+psycopg://user:pass@host:5432/db` for PostgreSQL |
-| `OPENTRACK_DATA` | `./data` (`/data` in Docker) | Attachments, signing key, SQLite file |
+| `FREEHOLD_DATA` | `./data` (`/data` in Docker) | Attachments, signing key, SQLite file |
 | `BASE_URL` | `http://localhost:8080` | Address used in email links |
 | `SECRET_KEY` | generated and stored in the data folder | Signs sign-in tokens; changing it signs everyone out |
 | `TOKEN_HOURS` | `168` | How long a sign-in lasts |
@@ -155,7 +155,7 @@ backend/app/
   query.py         the query language (mirrored in frontend/js/oql.js)
   notify.py        per-person notification rules, email, digests
   reports.py       burndown, velocity, flow, cycle time
-  importer.py      Jira CSV and OpenTrack JSON
+  importer.py      Jira CSV and Freehold JSON
   routers/         HTTP endpoints
 frontend/
   index.html, styles.css

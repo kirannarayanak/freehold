@@ -1,6 +1,6 @@
 /* Thin fetch wrapper: adds the token, turns API errors into readable messages. */
 (function () {
-  const KEY = "opentrack.token";
+  const KEY = "freehold.token";
   const API = {
     token: null,
     load() { try { this.token = localStorage.getItem(KEY); } catch (e) { this.token = null; } return this.token; },

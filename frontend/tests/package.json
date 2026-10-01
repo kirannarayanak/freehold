@@ -1,7 +1,7 @@
 {
-  "name": "opentrack-ui-tests",
+  "name": "freehold-ui-tests",
   "private": true,
-  "description": "Headless smoke test for the OpenTrack web app",
+  "description": "Headless smoke test for the Freehold web app",
   "scripts": { "test": "node smoke.js" },
   "devDependencies": { "jsdom": "^24.1.0" }
 }

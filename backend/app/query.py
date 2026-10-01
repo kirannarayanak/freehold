@@ -1,4 +1,4 @@
-"""OpenTrack Query Language (OQL): a small, JQL-style filter language.
+"""Freehold Query Language (OQL): a small, JQL-style filter language.
 
     assignee = me AND status != Done
     type in (Bug, Task) and priority:high due < 7d

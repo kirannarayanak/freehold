@@ -1,6 +1,6 @@
-# Contributing to OpenTrack
+# Contributing to Freehold
 
-Thanks for helping. A few things keep OpenTrack easy to run and easy to hack on.
+Thanks for helping. A few things keep Freehold easy to run and easy to hack on.
 
 ## Set up
 
@@ -18,7 +18,7 @@ Open http://localhost:8080 and create the first account. The web app has no buil
 - Run `pytest` in `backend/`, and `sh frontend/tests/run.sh` if you touched the web app.
 - Add or update a test for any behaviour you change.
 - If you change the query language, change both `backend/app/query.py` and `frontend/js/oql.js`, and keep their tests in step.
-- Keep the frontend dependency-free and CDN-free. Many teams run OpenTrack on networks that cannot reach the internet.
+- Keep the frontend dependency-free and CDN-free. Many teams run Freehold on networks that cannot reach the internet.
 - Never render user text as HTML without escaping it first (`MD.esc` or `MD.render`). The content security policy blocks inline scripts, so wire events with `data-act` and `data-change` attributes, not `onclick`.
 - Write interface text in plain, sentence-case English that says what happens ("Save workflow", not "Submit").
 

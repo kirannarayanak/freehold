@@ -1,4 +1,4 @@
-/* OpenTrack Query Language in the browser. Mirrors backend/app/query.py so filtering is instant. */
+/* Freehold Query Language in the browser. Mirrors backend/app/query.py so filtering is instant. */
 (function () {
   const PRIORITY_ORDER = ["Highest", "High", "Medium", "Low"];
   const ALIASES = { summary: "title", issuetype: "type", worktype: "type", labels: "label", epic: "parent",

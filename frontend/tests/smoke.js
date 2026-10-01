@@ -1,6 +1,6 @@
 /* Headless click-through of the web app against a running server seeded by seed.py. Run via run.sh. */
 const { JSDOM, VirtualConsole } = require("jsdom");
-const BASE = process.env.OPENTRACK_URL || "http://127.0.0.1:8099/";
+const BASE = process.env.FREEHOLD_URL || "http://127.0.0.1:8099/";
 const errors = [];
 const vc = new VirtualConsole();
 vc.on("jsdomError", e => errors.push("jsdomError: " + (e.stack || e.message)));
@@ -47,7 +47,7 @@ const ok = (name, cond, extra) => { results.push((cond ? "PASS " : "FAIL ") + na
   const F = (form, n) => form.querySelector('[name="' + n + '"]');
   const submit = f => f.dispatchEvent(new w.Event("submit", { bubbles: true, cancelable: true }));
   const key = (el, k, extra) => el.dispatchEvent(new w.KeyboardEvent("keydown", Object.assign({ key: k, bubbles: true, cancelable: true }, extra || {})));
-  await until(() => w.OpenTrack && !$("#auth").hidden && $("form[data-form=login]"), "login form");
+  await until(() => w.Freehold && !$("#auth").hidden && $("form[data-form=login]"), "login form");
   ok("login screen shows", true);
 
   // wrong password shows an error
@@ -103,7 +103,7 @@ const ok = (name, cond, extra) => { results.push((cond ? "PASS " : "FAIL ") + na
   srv = await api("GET", "/api/items/WEB-2", null, adminToken);
   ok("status change from dialog", srv.item.status === "In review");
   // assign bob
-  const bob = w.OpenTrack.S.members.find(m => m.name === "Bob Stone");
+  const bob = w.Freehold.S.members.find(m => m.name === "Bob Stone");
   change($('select[data-change="assign"]'), String(bob.id));
   await sleep(300);
   srv = await api("GET", "/api/items/WEB-2", null, adminToken);
@@ -135,7 +135,7 @@ const ok = (name, cond, extra) => { results.push((cond ? "PASS " : "FAIL ") + na
   srv = await api("GET", "/api/items/WEB-2", null, adminToken);
   ok("checklist item added", srv.item.checklist.length === 1);
   // attachment upload
-  await w.OpenTrack.uploadFiles([new File(["hello world"], "notes.txt", { type: "text/plain" })]);
+  await w.Freehold.uploadFiles([new File(["hello world"], "notes.txt", { type: "text/plain" })]);
   await sleep(200);
   ok("attachment listed", /notes\.txt/.test($(".atts").textContent));
   // log work
@@ -239,10 +239,10 @@ const ok = (name, cond, extra) => { results.push((cond ? "PASS " : "FAIL ") + na
   input($("#palQ"), "go to calendar");
   key($("#palQ"), "Enter");
   await sleep(200);
-  ok("palette runs command", w.OpenTrack.S.view === "calendar" && $(".cal"));
+  ok("palette runs command", w.Freehold.S.view === "calendar" && $(".cal"));
   key(d.body, "3");
   await sleep(150);
-  ok("number shortcut", w.OpenTrack.S.view === "list");
+  ok("number shortcut", w.Freehold.S.view === "list");
 
   // notifications panel
   click($('[data-act="toggleNotifs"]'));
@@ -288,7 +288,7 @@ const ok = (name, cond, extra) => { results.push((cond ? "PASS " : "FAIL ") + na
   ok("key suggestion", F(sf,"key").value === "MA", F(sf,"key").value);
   F(sf,"key").value = "MOB"; sf.querySelector('input[value="kanban"]').checked = true;
   submit(sf);
-  await until(() => w.OpenTrack.S.space && w.OpenTrack.S.space.key === "MOB", "new space");
+  await until(() => w.Freehold.S.space && w.Freehold.S.space.key === "MOB", "new space");
   ok("kanban space created", /Kanban/.test($("#view").textContent));
 
   // theme toggle and logout

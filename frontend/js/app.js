@@ -1,4 +1,4 @@
-/* OpenTrack web app. Plain JavaScript, no build step: edit and reload. */
+/* Freehold web app. Plain JavaScript, no build step: edit and reload. */
 (function () {
   "use strict";
   const $ = s => document.querySelector(s);
@@ -146,8 +146,8 @@
     const setup = status.needs_setup;
     const signup = !setup && status.allow_signup && mode === "signup";
     box.innerHTML = '<form class="auth-card" data-form="' + (setup || signup ? "register" : "login") + '">' +
-      '<div class="brand big"><span class="logo" aria-hidden="true">✦</span>OpenTrack</div>' +
-      (setup ? "<h1>Set up OpenTrack</h1><p class=\"muted\">This first account becomes the site admin. You can invite your team next.</p>"
+      '<div class="brand big"><span class="logo" aria-hidden="true">✦</span>Freehold</div>' +
+      (setup ? "<h1>Set up Freehold</h1><p class=\"muted\">This first account becomes the site admin. You can invite your team next.</p>"
         : signup ? "<h1>Create your account</h1>" : "<h1>Sign in</h1>") +
       (setup || signup ? '<label>Your name<input name="name" required autocomplete="name"></label>' : "") +
       '<label>Email<input name="email" type="email" required autocomplete="email"></label>' +
@@ -194,7 +194,7 @@
     S.importResult = "";
     b.members.forEach(m => { if (!S.userById[m.id]) { S.userById[m.id] = m; S.users.push(m); } });
     indexItems();
-    try { localStorage.setItem("opentrack.space", S.space.key); } catch (e) {}
+    try { localStorage.setItem("freehold.space", S.space.key); } catch (e) {}
   }
 
   async function start() {
@@ -228,7 +228,7 @@
       }
       if (parts[0] === "profile" || parts[0] === "admin" || parts[0] === "new-space") { S.view = parts[0]; return render(); }
       let last = null;
-      try { last = localStorage.getItem("opentrack.space"); } catch (e) {}
+      try { last = localStorage.getItem("freehold.space"); } catch (e) {}
       const target = S.spaces.find(s => s.key === last) || S.spaces[0];
       if (target) { location.replace("#/s/" + target.key + "/board"); return; }
       S.view = "new-space";
@@ -265,8 +265,8 @@
     badge.hidden = !S.notes.unread;
     badge.textContent = S.notes.unread > 99 ? "99+" : S.notes.unread;
     const titles = { profile: "Profile and notifications", admin: "People", "new-space": "New space" };
-    $("#title").textContent = titles[S.view] || (S.space ? S.space.name : "OpenTrack");
-    document.title = (titles[S.view] || (S.space ? S.space.name : "")) + " · OpenTrack";
+    $("#title").textContent = titles[S.view] || (S.space ? S.space.name : "Freehold");
+    document.title = (titles[S.view] || (S.space ? S.space.name : "")) + " · Freehold";
     const q = $("#q");
     if (document.activeElement !== q) q.value = S.query;
     document.body.classList.toggle("no-filter", !S.space || ["settings", "activity", "profile", "admin", "new-space"].includes(S.view));
@@ -905,7 +905,7 @@
 
       (admin ? '<section class="card-sec"><h3>Import</h3><p class="muted small">From Jira: open your filter, choose Export, then CSV (all fields). People are matched to members by name or email, unknown statuses are added to the workflow, and comments, sprints, parents, estimates and time spent come across.</p>' +
         '<label class="btn ghost sm file-btn">Import Jira CSV<input type="file" accept=".csv,text/csv" data-change="importJira" hidden></label> ' +
-        '<label class="btn ghost sm file-btn">Import OpenTrack JSON or prototype backup<input type="file" accept=".json,application/json" data-change="importOT" hidden></label>' +
+        '<label class="btn ghost sm file-btn">Import Freehold JSON or prototype backup<input type="file" accept=".json,application/json" data-change="importOT" hidden></label>' +
         (S.importResult ? '<div class="import-res">' + S.importResult + "</div>" : "") + "</section>" : "") +
 
       '<section class="card-sec"><h3>Export</h3><p class="muted small">Your data is yours. Exports include every work item with comments, time logs and links.</p>' +
@@ -1081,14 +1081,14 @@
   /* ---------- theme ---------- */
   function applyTheme() {
     let t = null;
-    try { t = localStorage.getItem("opentrack.theme"); } catch (e) {}
+    try { t = localStorage.getItem("freehold.theme"); } catch (e) {}
     if (!t) t = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     document.documentElement.dataset.theme = t;
   }
   function toggleTheme() {
     const t = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
     document.documentElement.dataset.theme = t;
-    try { localStorage.setItem("opentrack.theme", t); } catch (e) {}
+    try { localStorage.setItem("freehold.theme", t); } catch (e) {}
   }
 
   /* ---------- click actions (event delegation keeps the markup free of inline handlers) ---------- */
@@ -1288,7 +1288,7 @@
     wf: el => { const w = S.wf[+el.dataset.i]; w[el.dataset.k] = el.dataset.k === "wip" ? +el.value || 0 : el.value; if (el.dataset.k === "category") renderView(); },
     role: async el => { try { S.members = await API.patch("/api/spaces/" + S.space.key + "/members/" + el.dataset.id, { role: el.value }); toast("Role updated"); } catch (e) { fail(e); } renderView(); },
     importJira: el => importFile(el, "jira"),
-    importOT: el => importFile(el, "opentrack"),
+    importOT: el => importFile(el, "freehold"),
     userFlag: async el => {
       try { await API.patch("/api/users/" + el.dataset.id, { [el.dataset.k]: el.checked }); await loadUsers(); toast("Saved"); } catch (e) { fail(e); }
       renderView();
@@ -1547,5 +1547,5 @@
     try { await start(); } catch (e) { if (e.status === 401) showAuth(); else { fail(e); showAuth(); } }
   })();
 
-  window.OpenTrack = { S, parseQuick, route, uploadFiles, openItem, saveItem };
+  window.Freehold = { S, parseQuick, route, uploadFiles, openItem, saveItem };
 })();

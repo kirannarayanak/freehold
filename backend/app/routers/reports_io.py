@@ -91,7 +91,7 @@ def export_json(key: str, user: User = Depends(current_user_or_query_token), db:
         out_items.append(d)
     members = db.execute(select(User.email, Membership.role).join(Membership, Membership.user_id == User.id)
                          .where(Membership.space_id == space.id)).all()
-    payload = {"format": "opentrack-export", "version": 1, "space": space_to_dict(space),
+    payload = {"format": "freehold-export", "version": 1, "space": space_to_dict(space),
                "members": [{"email": e, "role": r} for e, r in members],
                "sprints": [sprint_to_dict(s) for s in db.scalars(select(Sprint).where(Sprint.space_id == space.id))],
                "items": out_items}
@@ -133,13 +133,13 @@ async def import_jira(key: str, file: UploadFile = File(...), user: User = Depen
     return summary
 
 
-@router.post("/spaces/{key}/import/opentrack")
-async def import_opentrack(key: str, file: UploadFile = File(...), user: User = Depends(current_user),
+@router.post("/spaces/{key}/import/freehold")
+async def import_freehold(key: str, file: UploadFile = File(...), user: User = Depends(current_user),
                            db: Session = Depends(get_db)):
     space, _ = get_space(db, key, user, need="admin")
     try:
         payload = json.loads((await file.read()).decode("utf-8-sig"))
-        summary = importer.import_opentrack_json(db, space, user, payload)
+        summary = importer.import_freehold_json(db, space, user, payload)
     except json.JSONDecodeError:
         raise HTTPException(422, "That file is not valid JSON.")
     except Exception as e:  # noqa: BLE001

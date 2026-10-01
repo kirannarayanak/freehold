@@ -1,10 +1,10 @@
-"""Seed demo data into an empty OpenTrack for the UI smoke test."""
+"""Seed demo data into an empty Freehold for the UI smoke test."""
 import datetime as dt
 import os
 
 import httpx
 
-c = httpx.Client(base_url=os.getenv("OPENTRACK_URL", "http://127.0.0.1:8099"))
+c = httpx.Client(base_url=os.getenv("FREEHOLD_URL", "http://127.0.0.1:8099"))
 a = c.post("/api/auth/register", json={"name":"Kiran Narayana","email":"kiran@example.com","password":"correct-horse"}).json()
 A = {"Authorization": "Bearer "+a["token"]}
 for n,e in (("Bob Stone","bob@example.com"),("Carol Diaz","carol@example.com")):

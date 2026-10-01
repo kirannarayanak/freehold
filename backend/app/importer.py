@@ -1,4 +1,4 @@
-"""Bring work in from Jira (CSV export) and from OpenTrack exports or the browser prototype's backup."""
+"""Bring work in from Jira (CSV export) and from Freehold exports or the browser prototype's backup."""
 import csv
 import io
 import re
@@ -238,9 +238,12 @@ def import_jira_csv(db: Session, space: Space, actor: User, raw: bytes) -> dict:
     return {"created": len(created_items), "sprints": len(sprints), "warnings": warnings}
 
 
-def import_opentrack_json(db: Session, space: Space, actor: User, payload: dict) -> dict:
-    """Accepts an OpenTrack export ({"format": "opentrack-export"}) or the browser prototype backup."""
-    if payload.get("format") == "opentrack-export":
+def import_freehold_json(db: Session, space: Space, actor: User, payload: dict) -> dict:
+    """Accepts a Freehold export or the browser prototype backup.
+
+    "opentrack-export" is the pre-rename marker; files exported before the rename still import.
+    """
+    if payload.get("format") in ("freehold-export", "opentrack-export"):
         issues = payload.get("items", [])
         statuses = payload.get("space", {}).get("statuses", [])
         sprint_meta = {s["id"]: s for s in payload.get("sprints", [])}
@@ -263,7 +266,7 @@ def import_opentrack_json(db: Session, space: Space, actor: User, payload: dict)
             "links": [l for l in i.get("links", []) if l.get("type") in ("blocks", "relates to", "duplicates")],
         } for i in project.get("issues", [])]
     else:
-        return {"created": 0, "warnings": ["This file is not an OpenTrack export or prototype backup."]}
+        return {"created": 0, "warnings": ["This file is not a Freehold export or prototype backup."]}
 
     for s in statuses:
         ensure_status(space, s.get("name", ""))

@@ -1,4 +1,4 @@
-# OpenTrack
+# Freehold
 
 Free, open-source, self-hosted work tracker (a Jira alternative), released free to the public. Status: beta. Phase 1 of the roadmap in README.md is built: real backend, accounts and space roles, markdown with attachments, personal notification rules, Jira import, one-command Docker install.
 
@@ -8,7 +8,7 @@ Free, open-source, self-hosted work tracker (a Jira alternative), released free 
 cd backend && python -m venv .venv && . .venv/bin/activate && pip install -r requirements-dev.txt
 uvicorn app.main:app --reload --port 8080      # from backend/, SQLite in backend/data/
 pytest -q                                      # from backend/, API tests on SQLite
-DATABASE_URL=postgresql+psycopg://user:pass@localhost:5432/opentrack_test pytest -q
+DATABASE_URL=postgresql+psycopg://user:pass@localhost:5432/freehold_test pytest -q
 sh frontend/tests/run.sh                       # UI click-through, own server on :8099, needs Node 18+
 docker compose up -d --build                   # full stack on http://localhost:8080
 ```
@@ -25,7 +25,7 @@ backend/app (FastAPI, SQLAlchemy 2, PostgreSQL or SQLite):
 - `query.py`: the OQL query language. `frontend/js/oql.js` mirrors it; change both and keep the same test cases passing in each.
 - `notify.py`: per-user prefs (event x in-app/email, instant/digest/off, muted items). `dispatch()` is the only way to notify anyone.
 - `reports.py`: burndown, velocity, cumulative flow, created vs resolved, cycle time, all rebuilt from History. Invariant: each item's first History row has field `created` with the starting status as `new_value`; later status changes use field `status`.
-- `importer.py`: Jira CSV (duplicate column names, comments as `date;account;text`, seconds to hours, backdated history) and OpenTrack JSON (own export and the old browser prototype backup).
+- `importer.py`: Jira CSV (duplicate column names, comments as `date;account;text`, seconds to hours, backdated history) and Freehold JSON (own export and the old browser prototype backup).
 - `routers/`: `auth_users`, `spaces` (members, sprints, filters, activity, `/changes` polling), `items` (bulk, comments, links, worklogs, watch, mute, attachments, search), `reports_io` (reports, notifications, import, export).
 
 frontend/ (plain JavaScript, no build step, no CDNs, classic scripts sharing globals):

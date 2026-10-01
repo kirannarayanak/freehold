@@ -4,13 +4,13 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: opentrack
-      POSTGRES_USER: opentrack
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opentrack}
+      POSTGRES_DB: freehold
+      POSTGRES_USER: freehold
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-freehold}
     volumes:
       - db:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U opentrack -d opentrack"]
+      test: ["CMD-SHELL", "pg_isready -U freehold -d freehold"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -22,9 +22,9 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "${OPENTRACK_PORT:-8080}:8080"
+      - "${FREEHOLD_PORT:-8080}:8080"
     environment:
-      DATABASE_URL: postgresql+psycopg://opentrack:${POSTGRES_PASSWORD:-opentrack}@db:5432/opentrack
+      DATABASE_URL: postgresql+psycopg://freehold:${POSTGRES_PASSWORD:-freehold}@db:5432/freehold
       BASE_URL: ${BASE_URL:-http://localhost:8080}
       SECRET_KEY: ${SECRET_KEY:-}
       ALLOW_SIGNUP: ${ALLOW_SIGNUP:-false}
@@ -33,7 +33,7 @@ services:
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_FROM: ${SMTP_FROM:-OpenTrack <opentrack@localhost>}
+      SMTP_FROM: ${SMTP_FROM:-Freehold <freehold@localhost>}
       SMTP_TLS: ${SMTP_TLS:-true}
     volumes:
       - data:/data

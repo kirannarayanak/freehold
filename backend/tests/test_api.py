@@ -235,7 +235,7 @@ def test_prototype_and_export_roundtrip(client, world):
     client.post("/api/spaces", json={"key": "PROTO", "name": "From prototype"}, headers=A)
     client.post("/api/spaces/PROTO/members", json={"email": "bob@example.com"}, headers=A)
     files = {"file": ("backup.json", io.BytesIO(json.dumps(backup).encode()), "application/json")}
-    r = client.post("/api/spaces/PROTO/import/opentrack", files=files, headers=A)
+    r = client.post("/api/spaces/PROTO/import/freehold", files=files, headers=A)
     assert r.status_code == 200 and r.json()["created"] == 3, r.text
     b = client.get("/api/spaces/PROTO", headers=A).json()
     items = {i["title"]: i for i in b["items"]}
@@ -243,10 +243,10 @@ def test_prototype_and_export_roundtrip(client, world):
     assert len(b["links"]) == 1 and items["Epic one"]["assignee_ids"] == [world["bob"]["id"]]
     assert any(s["name"] == "Sprint 12" for s in b["sprints"])
     exported = client.get("/api/spaces/PROTO/export", headers=A).json()
-    assert exported["format"] == "opentrack-export" and len(exported["items"]) == 3
+    assert exported["format"] == "freehold-export" and len(exported["items"]) == 3
     client.post("/api/spaces", json={"key": "COPY", "name": "Copy"}, headers=A)
     files = {"file": ("export.json", io.BytesIO(json.dumps(exported).encode()), "application/json")}
-    r = client.post("/api/spaces/COPY/import/opentrack", files=files, headers=A)
+    r = client.post("/api/spaces/COPY/import/freehold", files=files, headers=A)
     assert r.json()["created"] == 3
     csv_text = client.get("/api/spaces/COPY/export.csv", headers=A).text
     assert csv_text.startswith("Key,Summary") and "COPY-1" in csv_text
