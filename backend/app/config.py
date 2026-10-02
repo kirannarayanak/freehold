@@ -27,6 +27,10 @@ SECRET_KEY = _secret_key()
 TOKEN_HOURS = int(os.getenv("TOKEN_HOURS", "168"))
 ALLOW_SIGNUP = os.getenv("ALLOW_SIGNUP", "false").lower() == "true"
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8080").rstrip("/")
+# AGPL section 13: anyone running a MODIFIED version over a network must offer its users the
+# corresponding source. If you have changed Freehold, point this at your own repository. Leaving
+# it at the upstream URL while running modified code does not satisfy the licence.
+SOURCE_URL = os.getenv("SOURCE_URL", "https://github.com/freehold-dev/freehold")
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "25"))
 
 SMTP_HOST = os.getenv("SMTP_HOST", "")

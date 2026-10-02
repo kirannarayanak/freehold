@@ -15,6 +15,7 @@ With Docker, put these in `.env` next to `docker-compose.yml`. Start from `.env.
 | `SECRET_KEY` | generated | Signs session tokens. Leave empty and one is written to `<data>/secret.key`. **Changing it signs everyone out.** Set it explicitly if you run more than one app container, or they will reject each other's sessions |
 | `BASE_URL` | `http://localhost:8080` | The address people actually use. Links in notification emails are built from it |
 | `TOKEN_HOURS` | `168` | How long a session lasts. Default is one week |
+| `SOURCE_URL` | the upstream repository | Where this instance's source can be obtained. **If you have modified Freehold, point this at your own repository**: AGPL section 13 requires a modified network-served version to offer its source to users. It is shown in the sidebar |
 
 ## Access
 

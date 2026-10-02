@@ -156,7 +156,7 @@
     const box = $("#auth");
     box.hidden = false;
     let status = { needs_setup: false, allow_signup: false };
-    try { status = await API.get("/api/auth/status"); } catch (e) { fail(e); }
+    try { status = await API.get("/api/auth/status"); S.about = status; } catch (e) { fail(e); }
     const setup = status.needs_setup;
     const signup = !setup && status.allow_signup && mode === "signup";
     box.innerHTML = '<form class="auth-card" data-form="' + (setup || signup ? "register" : "login") + '">' +
@@ -276,6 +276,12 @@
       (f.mine ? '<button class="x" data-act="deleteFilter" data-id="' + f.id + '" aria-label="Delete filter ' + esc(f.name) + '">×</button>' : "") + "</div>").join("")
       : '<p class="hint">Type a filter above, then save it.</p>';
     $("#adminLink").hidden = !S.me.is_admin;
+    // AGPL section 13 requires a modified network-served version to offer its source to users.
+    const src = $("#srcLink");
+    if (src && S.about && S.about.source_url) {
+      src.href = S.about.source_url;
+      src.textContent = "Freehold \u00b7 " + (S.about.license || "AGPL-3.0");
+    }
     const badge = $("#badge");
     badge.hidden = !S.notes.unread;
     badge.textContent = S.notes.unread > 99 ? "99+" : S.notes.unread;

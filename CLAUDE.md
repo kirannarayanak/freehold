@@ -53,7 +53,10 @@ frontend/ (plain JavaScript, no build step, no CDNs, classic scripts sharing glo
 3. Phase 1 gate: a real team runs sprints on it. Expect fixes from that.
 4. Phase 2, depth on demand: custom fields and forms, workflow transition rules and approvals, a visual query builder over OQL, dashboards.
 5. Smaller gaps: Jira import of attachments, links and custom fields; server-sent events instead of polling; password reset by email; login rate limiting; per-user time zones (digests are UTC); paging the space bundle for very large spaces; an accessibility audit.
-6. There is no LICENSE yet. The owner decides between AGPL-3.0 and MIT or Apache-2.0; ask before adding one.
+6. Licensed **AGPL-3.0-or-later**. Two consequences for contributors: contributions are under the same
+   licence, and section 13 means anyone running a *modified* version over a network must offer its users
+   the corresponding source. That is why `SOURCE_URL` exists and is shown in the sidebar: a fork that
+   changes the code must point it at its own repository.
 
 ## Testing notes
 

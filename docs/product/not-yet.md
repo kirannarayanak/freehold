@@ -86,7 +86,7 @@ Nothing external needed. Listed in the order I would build them.
 
 | Question | Why it is yours | Blocking? |
 |---|---|---|
-| **A LICENSE** | No licence means **all rights reserved** — nobody can legally use, fork or contribute. AGPL-3.0 stops a competitor running it as closed SaaS; Apache-2.0 maximises adoption. I lean AGPL since the opening is self-hosting | **Yes. "Open source" is untrue until this exists** |
+| ~~A LICENSE~~ | **Decided: AGPL-3.0-or-later.** A competitor cannot take Freehold closed-source as a hosted service, which matters because the whole market opening is self-hosting | **Resolved** |
 | **Service desk or not** | A customer portal with SLAs is a different product sharing a database. Roughly doubles the surface and changes who the user is. I would stay a tracker and say so | No, but it shapes the roadmap |
 | **Accessibility audit** | Keyboard, labels, focus and contrast are done. A screen-reader audit needs a specialist or real NVDA/VoiceOver time. Public sector and large enterprise often require it | Only if your buyers require it |
 
@@ -217,13 +217,20 @@ boundary beats a vague one. But it is a market decision, not a technical one.
 
 ### A licence
 
-There is still no LICENSE file. Without one, the default is **all rights reserved** — nobody can legally
-use, fork or contribute to this, which rather undercuts "free and open source".
+**Decided: AGPL-3.0-or-later.** The full text is in [LICENSE](../../LICENSE).
 
-The real choice is between **AGPL-3.0** (a competitor cannot run it as a closed SaaS; some companies ban
-AGPL internally) and **Apache-2.0** (maximum adoption, and someone can take it commercial). Given the
-market opening is self-hosting, I lean AGPL. **This is yours to decide and it is blocking: an
-open-source project without a licence is not open source.**
+AGPL rather than Apache because the entire market opening is that Atlassian withdrew self-hosting.
+Apache would let a competitor take this work and run it as exactly the closed hosted service Freehold
+exists to be an alternative to. AGPL does not.
+
+The practical consequence is **section 13**: anyone running a *modified* version over a network must
+offer its users the corresponding source. Freehold implements this rather than leaving it to operators
+to remember — a `SOURCE_URL` setting is shown in the sidebar on every page. If you fork and change the
+code, point it at your repository. Leaving it on the upstream URL while running modified code does not
+satisfy the licence.
+
+Unmodified self-hosting carries no such obligation. Running Freehold as-is for your own team requires
+nothing of you.
 
 ### Accessibility
 

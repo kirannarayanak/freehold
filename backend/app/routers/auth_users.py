@@ -66,7 +66,8 @@ def _check_new_user(db: Session, name: str, email: str, password: str) -> str:
 
 @router.get("/auth/status")
 def auth_status(db: Session = Depends(get_db)):
-    return {"needs_setup": db.scalar(select(func.count(User.id))) == 0, "allow_signup": config.ALLOW_SIGNUP}
+    return {"needs_setup": db.scalar(select(func.count(User.id))) == 0, "allow_signup": config.ALLOW_SIGNUP,
+            "source_url": config.SOURCE_URL, "license": "AGPL-3.0-or-later"}
 
 
 @router.post("/auth/register")

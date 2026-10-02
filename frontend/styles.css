@@ -45,6 +45,8 @@ a { color: var(--iris); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .muted { color: var(--muted); } .small { font-size: 12px; } .grow { flex: 1; } .danger { color: var(--danger-ink); }
 .pad { padding: 12px; } .hint { font-size: 12px; color: var(--night-ink); opacity: .7; margin: 8px 0 0; }
+.src-link { color: var(--night-ink); text-decoration: none; }
+.src-link:hover { color: #fff; text-decoration: underline; }
 .warn { color: var(--warn); background: var(--warn-soft); padding: 8px 10px; border-radius: var(--r-sm); }
 
 /* controls */

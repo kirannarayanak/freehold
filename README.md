@@ -43,6 +43,18 @@ uvicorn app.main:app --reload --port 8080
 
 This uses SQLite in `backend/data/`. Set `DATABASE_URL=postgresql+psycopg://user:pass@host:5432/db` for PostgreSQL. The web app in `frontend/` is plain JavaScript with no build step and no CDNs, so it works on locked-down and offline networks. Edit a file and reload.
 
+## Licence
+
+[AGPL-3.0-or-later](LICENSE).
+
+Run it unmodified for your own team and this asks nothing of you. If you **modify** Freehold and serve it
+over a network, section 13 requires you to offer your users the corresponding source: set `SOURCE_URL` to
+your repository and the app will show it.
+
+AGPL rather than a permissive licence for one reason. The whole point of this project is that self-hosting
+was taken away; a permissive licence would let someone take it closed and hosted, which is the thing it
+exists to be an alternative to.
+
 ## Documentation
 
 Full documentation is in [docs/](docs/README.md).
