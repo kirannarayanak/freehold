@@ -48,6 +48,28 @@ Then set, at minimum:
 And take a backup before you start, so you can compare later: see
 [backup and restore](../admin-guide/backup-and-restore.md).
 
+## Putting it on a hostname that lasts
+
+A Cloudflare *quick* tunnel (`cloudflared tunnel --url http://localhost:8080`) is the fastest way to
+show somebody, and the wrong way to run a pilot: it gets a random hostname that changes every time it
+restarts, so bookmarks break and links already sent by email point nowhere.
+
+A **named** tunnel keeps one hostname across restarts and reboots. It is free, and needs a domain in
+Cloudflare.
+
+```bash
+cloudflared tunnel login                              # once, in a browser; pick your domain
+sh scripts/named-tunnel.sh tracker.yourdomain.com     # everything else
+```
+
+That creates the tunnel, points DNS at it, writes the config, installs it as a service so it survives
+a reboot, sets `BASE_URL`, and recreates the app so notification links are right.
+
+No domain? Two honest options: register one (about $10 a year, and you will want one anyway), or put
+Freehold on a small VPS and skip tunnelling altogether. Tailscale also gives a stable hostname without
+a domain, but every person in the pilot has to join your tailnet first, which is friction a pilot does
+not need.
+
 ## Day one
 
 1. **Import the real project**, not a toy one. [Migrating from Jira](../migrating/from-jira.md).
