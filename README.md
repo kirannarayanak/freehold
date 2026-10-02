@@ -4,7 +4,7 @@
 
 Free, open-source work tracking for software teams. Boards, backlogs, sprints and reports like Jira, without the weight, the per-seat bill or admin-controlled notification schemes. You host it, you own the data, and it starts with one command.
 
-![Sprint board](docs/screenshots/board.png)
+![The sprint board: swimlanes, drag and drop, blocked and overdue flags, story points and multiple assignees](docs/screenshots/board.png)
 
 > **Status: beta.** This is Phase 1 of the roadmap. Expect rough edges, and use Settings > Export before upgrading.
 
@@ -88,7 +88,12 @@ Full documentation is in [docs/](docs/README.md).
 - **Command palette** (Ctrl K or Cmd K), keyboard shortcuts, one-line quick create, duplicate warnings, light and dark themes.
 - **REST API** with interactive docs at `/docs`.
 
-![A work item with markdown, links and per-field editing](docs/screenshots/work-item.png)
+![A work item: markdown with a task list and mentions, links, attachments, comments, and every field editable in place](docs/screenshots/work-item.png)
+
+Every report is rebuilt from the history table rather than read from current state, so a chart of last
+quarter stays the chart of last quarter even after someone edits an item today.
+
+![Reports: burndown, velocity, cumulative flow, created vs resolved, cycle time and workload](docs/screenshots/reports.png)
 
 ## Query language
 
