@@ -1,5 +1,8 @@
 # Freehold
 
+[![tests](https://github.com/kirannarayanak/freehold/actions/workflows/ci.yml/badge.svg)](https://github.com/kirannarayanak/freehold/actions/workflows/ci.yml)
+[![licence: AGPL v3](https://img.shields.io/badge/licence-AGPL--3.0-blue)](LICENSE)
+
 Free, open-source work tracking for software teams. Boards, backlogs, sprints and reports like Jira, without the weight, the per-seat bill or admin-controlled notification schemes. You host it, you own the data, and it starts with one command.
 
 ![Sprint board](docs/screenshots/board.png)
