@@ -10,7 +10,7 @@ The supported way to run Freehold. One command brings up the app and PostgreSQL.
 ## Install
 
 ```bash
-git clone <your-repo-url> freehold
+git clone https://github.com/kirannarayanak/freehold.git
 cd freehold
 docker compose up -d --build
 ```
