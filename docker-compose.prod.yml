@@ -1,0 +1,31 @@
+# Production overlay: TLS, and nothing but the proxy exposed.
+#
+#   cp .env.example .env            # then edit it, and set FREEHOLD_BIND=127.0.0.1
+#   echo "FREEHOLD_HOST=tracker.example.com" >> .env
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Caddy gets and renews a Let's Encrypt certificate on its own. Point an A record at this server
+# first: certificate issuance checks the name resolves here.
+services:
+  app:
+    # Reachable only from inside this host; the proxy is the only way in.
+    ports: !override
+      - "127.0.0.1:${FREEHOLD_PORT:-8080}:8080"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      FREEHOLD_HOST: ${FREEHOLD_HOST:?set FREEHOLD_HOST to the hostname people will use}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

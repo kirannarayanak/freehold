@@ -128,6 +128,22 @@ def main():
             elif base:
                 note(OK, "BASE_URL matches the address in use")
 
+    # --- is the app reachable around the proxy? -------------------------------
+    if args.compose and url.startswith("https://"):
+        try:
+            out = subprocess.run(["docker", "compose", "-p", args.compose, "ps", "--format",
+                                  "{{.Publishers}}"], capture_output=True, text=True, timeout=20).stdout
+            # A published port on 0.0.0.0 means the app answers on plain HTTP as well as through
+            # the proxy, so anyone who knows the address can skip TLS entirely.
+            if "0.0.0.0" in out:
+                note(FAIL, "the app is published on every interface",
+                     "TLS can be bypassed by going straight to the port. Set FREEHOLD_BIND=127.0.0.1 "
+                     "and use docker-compose.prod.yml so only the proxy is exposed")
+            else:
+                note(OK, "only the proxy is exposed")
+        except Exception:  # noqa: BLE001
+            pass
+
     # --- can you get the data back out? ---------------------------------------
     if args.compose:
         try:

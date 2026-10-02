@@ -45,6 +45,8 @@ See [email](email.md).
 | Variable | Default | What it does |
 |---|---|---|
 | `FREEHOLD_PORT` | `8080` | Host port |
+| `FREEHOLD_BIND` | `0.0.0.0` | Which interface to publish on. Set to `127.0.0.1` on a public server so the only way in is a TLS-terminating proxy |
+| `FREEHOLD_HOST` | unset | Hostname for the Caddy proxy, used only by `docker-compose.prod.yml` |
 | `POSTGRES_PASSWORD` | `freehold` | **Change this before the instance is reachable by anyone else** |
 
 ## Development only

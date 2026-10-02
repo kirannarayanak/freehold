@@ -1,0 +1,10 @@
+# Terminates TLS and passes everything to Freehold. Caddy obtains and renews the certificate itself.
+{$FREEHOLD_HOST} {
+	encode gzip
+	# The app already sets its own security headers and CSP; these cover the transport.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+	reverse_proxy app:8080
+}

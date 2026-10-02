@@ -30,6 +30,7 @@ what works today and what does not.
 
 | | |
 |---|---|
+| [Deploying for real](admin-guide/deploy.md) | A server, TLS, firewall, backups. About £5 a month |
 | [Configuration](admin-guide/configuration.md) | Every environment variable |
 | [Users and roles](admin-guide/users-and-roles.md) | Accounts, space roles, what each can do |
 | [Workflow](admin-guide/workflow.md) | Statuses, categories, WIP limits |
