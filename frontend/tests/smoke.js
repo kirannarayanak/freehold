@@ -18,6 +18,15 @@ async function until(fn, label, ms = 4000) {
   while (Date.now() - t0 < ms) { try { const v = fn(); if (v) return v; } catch (e) {} await sleep(40); }
   throw new Error("Timed out waiting for: " + label);
 }
+async function untilApi(fetchFn, predicate, label, ms = 5000) {
+  const t0 = Date.now();
+  let last;
+  while (Date.now() - t0 < ms) {
+    try { last = await fetchFn(); if (predicate(last)) return last; } catch (e) {}
+    await sleep(60);
+  }
+  return last; // hand back whatever we last saw so the assertion can report the real value
+}
 const results = [];
 const ok = (name, cond, extra) => { results.push((cond ? "PASS " : "FAIL ") + name + (extra ? " (" + extra + ")" : "")); };
 
@@ -88,8 +97,8 @@ const ok = (name, cond, extra) => { results.push((cond ? "PASS " : "FAIL ") + na
   const doneCol = $$(".col").find(c => c.dataset.status === "Done");
   doneCol.dispatchEvent(dragEv("dragover"));
   doneCol.dispatchEvent(dragEv("drop"));
-  await sleep(300);
-  let srv = await api("GET", "/api/items/WEB-3", null, adminToken);
+  let srv = await untilApi(() => api("GET", "/api/items/WEB-3", null, adminToken),
+    d => d.item.status === "Done", "drag to Done");
   ok("drag to Done saves status", srv.item.status === "Done" && srv.item.resolved_at, srv.item.status);
 
   // open item dialog
@@ -99,14 +108,14 @@ const ok = (name, cond, extra) => { results.push((cond ? "PASS " : "FAIL ") + na
   ok("markdown rendered", $(".desc strong") && $(".desc input[type=checkbox][checked]") && $(".desc .mention") && $(".desc a.keyref"));
   ok("links shown", /blocks/.test($(".dlg-main").textContent));
   change($('select[data-field="status"]'), "In review");
-  await sleep(300);
-  srv = await api("GET", "/api/items/WEB-2", null, adminToken);
+  srv = await untilApi(() => api("GET", "/api/items/WEB-2", null, adminToken),
+    d => d.item.status === "In review", "status change");
   ok("status change from dialog", srv.item.status === "In review");
   // assign bob
   const bob = w.Freehold.S.members.find(m => m.name === "Bob Stone");
   change($('select[data-change="assign"]'), String(bob.id));
-  await sleep(300);
-  srv = await api("GET", "/api/items/WEB-2", null, adminToken);
+  srv = await untilApi(() => api("GET", "/api/items/WEB-2", null, adminToken),
+    d => d.item.assignee_ids.length === 2, "second assignee");
   ok("multiple assignees", srv.item.assignee_ids.length === 2, JSON.stringify(srv.item.assignee_ids));
   // description edit
   click($(".desc"));
@@ -115,8 +124,8 @@ const ok = (name, cond, extra) => { results.push((cond ? "PASS " : "FAIL ") + na
   click($('[data-act="descTab"][data-p="1"]'));
   ok("preview renders", $(".md.prev strong") && $(".md.prev .mention"));
   click($('[data-act="saveDesc"]'));
-  await sleep(300);
-  srv = await api("GET", "/api/items/WEB-2", null, adminToken);
+  srv = await untilApi(() => api("GET", "/api/items/WEB-2", null, adminToken),
+    d => d.item.description === "New **desc** for @bob.stone", "description save");
   ok("description saved", srv.item.description === "New **desc** for @bob.stone");
   // comment
   await until(() => $("#cBody"), "comment box");
@@ -125,8 +134,8 @@ const ok = (name, cond, extra) => { results.push((cond ? "PASS " : "FAIL ") + na
   click($('#mentionBox [data-act="pickMention"]'));
   ok("mention inserted", $("#cBody").value === "Looks good @bob.stone ", JSON.stringify($("#cBody").value));
   click($('[data-act="addComment"]'));
-  await sleep(300);
-  srv = await api("GET", "/api/items/WEB-2", null, adminToken);
+  srv = await untilApi(() => api("GET", "/api/items/WEB-2", null, adminToken),
+    d => d.comments.length === 2, "comment post");
   ok("comment posted", srv.comments.length === 2);
   // checklist add
   const ck = $('input[data-quick="check"]');
@@ -172,8 +181,8 @@ const ok = (name, cond, extra) => { results.push((cond ? "PASS " : "FAIL ") + na
   ok("duplicate suggestion", /Guest checkout/.test($("#dupes").textContent));
   F(cf,"title").value = "bug: Fix login timeout @bob !high #web ~3";
   submit(cf);
-  await sleep(400);
-  const all = await api("GET", "/api/spaces/WEB", null, adminToken);
+  const all = await untilApi(() => api("GET", "/api/spaces/WEB", null, adminToken),
+    d => d.items.some(i => i.title === "Fix login timeout"), "quick syntax create");
   const made = all.items.find(i => i.title === "Fix login timeout");
   ok("quick syntax create", made && made.type === "Bug" && made.priority === "High" && made.labels[0] === "web" && made.points === 3 && made.assignee_ids[0] === bob.id,
     made && JSON.stringify([made.type, made.priority, made.labels, made.points, made.assignee_ids]));
@@ -181,7 +190,7 @@ const ok = (name, cond, extra) => { results.push((cond ? "PASS " : "FAIL ") + na
   // board quick create
   const qc = $('input[data-quick="board"]');
   qc.value = "Board quick item ~2"; key(qc, "Enter");
-  await sleep(400);
+  await until(() => $$(".card").some(c => /Board quick item/.test(c.textContent)), "board quick card");
   ok("board quick create in sprint", $$(".card").some(c => /Board quick item/.test(c.textContent)));
 
   // views
