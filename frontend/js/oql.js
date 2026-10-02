@@ -224,7 +224,7 @@
     if (kind) {
       const raw = (it.custom || {})[f];
       if (raw == null) return false;
-      if (kind === "user") return userHit(raw, value, ctx, false);
+      if (kind === "user") return userHit(raw, value, ctx, op === "=");
       if (kind === "number") {
         const target = Number(value);
         if (isNaN(target)) throw new QueryError("'" + value + "' is not a number, and " + f + " holds numbers.");

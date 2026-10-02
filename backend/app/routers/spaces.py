@@ -619,7 +619,8 @@ def test_webhook(hook_id: int, user: User = Depends(current_user), db: Session =
 
 
 @router.post("/spaces/{key}/sprints")
-def create_sprint(key: str, body: SprintIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def create_sprint(key: str, body: SprintIn = SprintIn(), user: User = Depends(current_user),
+                  db: Session = Depends(get_db)):
     space, _ = get_space(db, key, user, need="member")
     n = db.scalar(select(func.count(Sprint.id)).where(Sprint.space_id == space.id)) + 1
     sprint = Sprint(space_id=space.id, name=(body.name or f"Sprint {n}").strip()[:120], goal=body.goal,
@@ -656,7 +657,7 @@ def update_sprint(sprint_id: int, body: SprintPatch, user: User = Depends(curren
 
 
 @router.post("/sprints/{sprint_id}/complete")
-def complete_sprint(sprint_id: int, body: CompleteIn, user: User = Depends(current_user),
+def complete_sprint(sprint_id: int, body: CompleteIn = CompleteIn(), user: User = Depends(current_user),
                     db: Session = Depends(get_db)):
     sprint, space = _sprint(db, sprint_id, user)
     if sprint.state != "active":

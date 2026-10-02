@@ -63,6 +63,11 @@ Highest. Everything else matches loosely.
 `me` and `currentuser()` both mean you, so a saved filter shared with the team shows each person their
 own work.
 
+`=` matches a person **exactly**, against their display name, handle or email. `:` and `~` match part of
+one. So `assignee = sam.okafor` finds Sam, `assignee = sam` finds nobody, and `assignee ~ sam` finds Sam
+and anyone else whose details contain "sam". Exactness is the point: a partial `=` would quietly match
+Samantha too. The same rule applies to custom fields of type person.
+
 ```
 assignee = me AND status != Done
 ```

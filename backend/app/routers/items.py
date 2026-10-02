@@ -309,7 +309,8 @@ def delete_worklog(worklog_id: int, user: User = Depends(current_user), db: Sess
 
 
 @router.post("/items/{key}/watch")
-def watch(key: str, body: FlagIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def watch(key: str, body: FlagIn = FlagIn(), user: User = Depends(current_user),
+          db: Session = Depends(get_db)):
     item, space, role = _item(db, key, user)
     watching = user in item.watchers
     if body.on and not watching:
@@ -322,7 +323,8 @@ def watch(key: str, body: FlagIn, user: User = Depends(current_user), db: Sessio
 
 
 @router.post("/items/{key}/mute")
-def mute(key: str, body: FlagIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def mute(key: str, body: FlagIn = FlagIn(), user: User = Depends(current_user),
+         db: Session = Depends(get_db)):
     item, space, role = _item(db, key, user)
     stored = dict(user.prefs or {})
     muted = [k for k in stored.get("muted", []) if k != item.key]

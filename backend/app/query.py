@@ -358,7 +358,7 @@ def _clause(name, op, values, item, ctx):
         raw = (item.get("custom") or {}).get(f)
         if raw is None:
             return False
-        return _user_hit(raw, value, ctx, exact=False)
+        return _user_hit(raw, value, ctx, exact=(op == "="))
     if f in ctx.custom and ctx.custom[f] in ("number", "date", "checkbox"):
         raw = (item.get("custom") or {}).get(f)
         if raw is None:

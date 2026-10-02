@@ -615,7 +615,10 @@ def test_custom_fields(client, world):
     assert keys("target_date < 2027-01-01") == {K}
     assert keys("teams = web") == {K}
     assert keys("regression = true") == {K}
-    assert keys("owner = bob") == {K}, "a user field should match by name or handle"
+    # = is exact against name, handle or email, exactly as it is for assignee. : and ~ are contains.
+    assert keys("owner = bob.stone") == {K}, "a user field should match its handle exactly"
+    assert keys("owner ~ bob") == {K}, "contains should match a partial name"
+    assert keys("owner = bob") == set(), "= must not match a partial name, or it would match Samantha too"
     assert keys("severity is empty") == {other["key"]}
     assert keys("severity != Low") == {other["key"]}
 

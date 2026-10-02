@@ -137,7 +137,8 @@ def list_notifications(limit: int = 50, user: User = Depends(current_user), db: 
 
 
 @router.post("/notifications/read")
-def mark_read(body: ReadIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def mark_read(body: ReadIn = ReadIn(), user: User = Depends(current_user),
+              db: Session = Depends(get_db)):
     stmt = update(Notification).where(Notification.user_id == user.id)
     if not body.all:
         stmt = stmt.where(Notification.id.in_(body.ids or [-1]))
