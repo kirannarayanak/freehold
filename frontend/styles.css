@@ -89,6 +89,9 @@ label.inline { display: inline-flex; align-items: center; gap: 6px; margin: 0; f
 .auth { min-height: 100%; display: grid; place-items: center; padding: 24px; background: var(--night); }
 .auth-card { background: var(--paper); border-radius: var(--r-lg); padding: 32px; width: min(390px, 100%); box-shadow: 0 24px 70px rgba(0, 0, 0, .34); }
 .auth-card h1 { font-size: 20px; margin: 14px 0 6px; }
+.auth-src { margin: 14px 0 0; text-align: center; }
+.auth-src a { color: var(--muted); text-decoration: none; }
+.auth-src a:hover { text-decoration: underline; }
 .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; letter-spacing: -.01em; }
 .brand.big { font-size: 20px; color: var(--ink); }
 .logo { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: var(--iris); color: #fff; font-size: 15px; }

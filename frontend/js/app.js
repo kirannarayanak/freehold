@@ -170,6 +170,10 @@
       '<button class="btn wide" type="submit">' + (setup ? "Create admin account" : signup ? "Create account" : "Sign in") + "</button>" +
       (!setup && status.allow_signup ? '<p class="muted small">' + (signup ? '<a href="#" data-act="authMode" data-mode="login">I already have an account</a>' : '<a href="#" data-act="authMode" data-mode="signup">Create an account</a>') + "</p>" : "") +
       (!setup && !status.allow_signup ? '<p class="muted small">No account yet? Ask a site admin to add you.</p>' : "") +
+      // Offered here too: a signed-out visitor never sees the sidebar, and AGPL section 13 is about
+      // everyone interacting with the instance, not only the people who get past the login box.
+      '<p class="muted small auth-src"><a href="' + esc(status.source_url || "https://github.com/kirannarayanak/freehold") +
+      '" rel="noopener">Freehold · ' + esc(status.license || "AGPL-3.0-or-later") + "</a></p>" +
       "</form>";
     const first = box.querySelector("input");
     if (first) first.focus();
@@ -212,9 +216,16 @@
     try { localStorage.setItem("freehold.space", S.space.key); } catch (e) {}
   }
 
+  // Where this instance's source can be found. AGPL section 13 obliges a MODIFIED network-served
+  // version to offer it, which means the operator's configured SOURCE_URL has to reach the people
+  // actually using the app, not only whoever is looking at the sign-in screen.
+  async function loadAbout() {
+    try { S.about = await API.get("/api/auth/status"); } catch (e) { /* the link keeps its default */ }
+  }
+
   async function start() {
     S.me = await API.get("/api/me");
-    await Promise.all([loadUsers(), loadSpaces()]);
+    await Promise.all([loadUsers(), loadSpaces(), loadAbout()]);
     $("#auth").hidden = true;
     $("#app").hidden = false;
     applyTheme();

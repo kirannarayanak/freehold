@@ -26,6 +26,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://freehold:${POSTGRES_PASSWORD:-freehold}@db:5432/freehold
       BASE_URL: ${BASE_URL:-http://localhost:8080}
+      SOURCE_URL: ${SOURCE_URL:-}
       SECRET_KEY: ${SECRET_KEY:-}
       ALLOW_SIGNUP: ${ALLOW_SIGNUP:-false}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
