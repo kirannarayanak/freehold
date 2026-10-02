@@ -22,8 +22,15 @@ cheap. Discovering a gap halfway through a sprint you cannot abandon is not.
 
 ```bash
 docker compose up -d --build
-python scripts/validate.py http://your-host:8080
+python scripts/validate.py  http://your-host:8080                 # does the product work
+python scripts/preflight.py http://your-host:8080 --compose freehold   # is this deployment safe
 ```
+
+The two ask different questions. `validate.py` runs a whole lifecycle against a **fresh, empty**
+instance and tells you the product works. `preflight.py` runs against the instance you intend to
+use and tells you whether it is fit for other people: default passwords, mail that silently goes
+nowhere, notification links pointing at localhost, no working backup. The second is the one that
+sinks pilots.
 
 `validate.py` runs a whole lifecycle against a **fresh, empty** instance: setup, Jira import, custom
 fields, planning, permissions, working a sprint, filtering, completing, reporting, releasing, and

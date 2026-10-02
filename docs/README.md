@@ -14,6 +14,7 @@ what works today and what does not.
 | [Install from source](getting-started/install-source.md) | For development and contributing |
 | [Your first space](getting-started/first-space.md) | Accounts, spaces, workflow, your first sprint |
 | [Running a pilot](getting-started/pilot.md) | Putting it in front of a real team, and what to watch for |
+| [preflight.py](../scripts/preflight.py) | Check a deployment is fit for other people before they arrive |
 
 ## Using Freehold
 
