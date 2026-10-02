@@ -13,6 +13,7 @@ what works today and what does not.
 | [Install with Docker](getting-started/install-docker.md) | One command. The supported way to run Freehold |
 | [Install from source](getting-started/install-source.md) | For development and contributing |
 | [Your first space](getting-started/first-space.md) | Accounts, spaces, workflow, your first sprint |
+| [Running a pilot](getting-started/pilot.md) | Putting it in front of a real team, and what to watch for |
 
 ## Using Freehold
 

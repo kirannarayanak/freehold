@@ -63,6 +63,7 @@ Full documentation is in [docs/](docs/README.md).
 |---|---|
 | [Install with Docker](docs/getting-started/install-docker.md) | The supported way to run it |
 | [Your first space](docs/getting-started/first-space.md) | Empty install to a running sprint |
+| [Running a pilot](docs/getting-started/pilot.md) | Putting it in front of a real team |
 | [Migrating from Jira](docs/migrating/from-jira.md) | CSV import, what transfers, what does not |
 | [OQL query language](docs/reference/oql.md) | The filter language, in full |
 | [REST API](docs/reference/rest-api.md) | |
