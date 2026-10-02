@@ -88,6 +88,11 @@ Full documentation is in [docs/](docs/README.md).
 - **Command palette** (Ctrl K or Cmd K), keyboard shortcuts, one-line quick create, duplicate warnings, light and dark themes.
 - **REST API** with interactive docs at `/docs`.
 
+The dark theme follows your operating system by default, and every colour pair in both themes is
+checked against WCAG AA contrast.
+
+![The same board in dark mode](docs/screenshots/board-dark.png)
+
 ![A work item: markdown with a task list and mentions, links, attachments, comments, and every field editable in place](docs/screenshots/work-item.png)
 
 Every report is rebuilt from the history table rather than read from current state, so a chart of last
