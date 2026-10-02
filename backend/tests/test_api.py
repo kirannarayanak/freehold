@@ -156,6 +156,37 @@ def test_sprints_and_reports(client, world):
     assert client.get("/api/items/WEB-1", headers=B).json()["item"]["sprint_id"] == other["id"]
 
 
+def test_sprint_state_transitions(client, world):
+    """A PATCH that cannot do what was asked must say so, not return 200 and ignore it."""
+    A = world["A"]
+    client.post("/api/spaces", json={"key": "SPR", "name": "Sprints"}, headers=A)
+    s1 = client.post("/api/spaces/SPR/sprints", json={"name": "One"}, headers=A).json()
+    s2 = client.post("/api/spaces/SPR/sprints", json={"name": "Two"}, headers=A).json()
+
+    assert client.patch(f"/api/sprints/{s1['id']}", json={"state": "active"}, headers=A).json()["state"] == "active"
+    # one active sprint at a time
+    r = client.patch(f"/api/sprints/{s2['id']}", json={"state": "active"}, headers=A)
+    assert r.status_code == 422 and "active sprint" in r.json()["detail"]
+
+    # standing one back down works, and really changes it
+    def sprint(sid):
+        return next(x for x in client.get("/api/spaces/SPR", headers=A).json()["sprints"] if x["id"] == sid)
+
+    assert client.patch(f"/api/sprints/{s1['id']}", json={"state": "future"}, headers=A).json()["state"] == "future"
+    assert sprint(s1["id"])["state"] == "future", "the change must actually persist, not just be echoed"
+    # which frees the other to start
+    assert client.patch(f"/api/sprints/{s2['id']}", json={"state": "active"}, headers=A).status_code == 200
+
+    # closing is only ever done by completing, so the committed/completed pair is recorded
+    r = client.patch(f"/api/sprints/{s2['id']}", json={"state": "closed"}, headers=A)
+    assert r.status_code == 422 and "completing it" in r.json()["detail"]
+    assert client.post(f"/api/sprints/{s2['id']}/complete", headers=A).status_code == 200
+    done = sprint(s2["id"])
+    assert done["state"] == "closed" and done["committed_points"] is not None
+    # and a closed sprint stays closed
+    assert client.patch(f"/api/sprints/{s2['id']}", json={"state": "active"}, headers=A).status_code == 422
+
+
 def test_changes_bulk_clone_delete(client, world):
     A, B = world["A"], world["B"]
     since = client.get("/api/spaces/WEB", headers=B).json()["server_time"]

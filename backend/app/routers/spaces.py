@@ -642,16 +642,26 @@ def update_sprint(sprint_id: int, body: SprintPatch, user: User = Depends(curren
         sprint.start_date = _date(body.start, "Start date")
     if body.end is not None:
         sprint.end_date = _date(body.end, "End date")
-    if body.state == "active" and sprint.state != "active":
+    if body.state is not None and body.state != sprint.state:
+        if body.state not in ("future", "active"):
+            # "closed" is reachable only through /complete, which records what was committed
+            # against what was finished. Allowing it here would silently lose that.
+            raise HTTPException(422, "A sprint is closed by completing it, not by setting its state.")
         if sprint.state == "closed":
             raise HTTPException(422, "A completed sprint cannot be restarted.")
-        if db.scalar(select(Sprint.id).where(Sprint.space_id == space.id, Sprint.state == "active")):
-            raise HTTPException(422, "Complete the active sprint before starting another.")
-        sprint.state = "active"
-        sprint.start_date = sprint.start_date or date.today()
-        sprint.end_date = sprint.end_date or sprint.start_date + timedelta(days=13)
-        sprint.committed_points = sum(i.points or 0 for i in db.scalars(
-            select(WorkItem).where(WorkItem.sprint_id == sprint.id)))
+        if body.state == "active":
+            if db.scalar(select(Sprint.id).where(Sprint.space_id == space.id, Sprint.state == "active")):
+                raise HTTPException(422, "Complete the active sprint before starting another.")
+            sprint.state = "active"
+            sprint.start_date = sprint.start_date or date.today()
+            sprint.end_date = sprint.end_date or sprint.start_date + timedelta(days=13)
+            sprint.committed_points = sum(i.points or 0 for i in db.scalars(
+                select(WorkItem).where(WorkItem.sprint_id == sprint.id)))
+        else:
+            # Standing a sprint back down, for one started by mistake. The commitment is cleared
+            # because it was never really made.
+            sprint.state = "future"
+            sprint.committed_points = None
     db.commit()
     return sprint_to_dict(sprint)
 
