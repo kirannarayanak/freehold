@@ -7,3 +7,5 @@ data/
 *.db-wal
 .env
 .venv/
+PILOT-CREDENTIALS.txt
+PILOT-RUNBOOK.md
